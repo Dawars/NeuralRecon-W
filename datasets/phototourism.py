@@ -658,6 +658,9 @@ class PhototourismDataset(Dataset):
 
                     if self.depth_percent > 0:
                         valid_depth = rays[:, -2] > 0
+                        if not valid_depth.any():
+                            continue
+
                         valid_num = torch.sum(valid_depth).long().item()
                         current_len = rays.size()[0]
                         curent_percent = valid_num / current_len
