@@ -1,3 +1,5 @@
+import math
+
 import open3d as o3d
 import torch
 from torch.utils.data import Dataset
@@ -32,7 +34,7 @@ class PhototourismDataset(Dataset):
         self,
         root_dir,
         split="train",
-        img_downscale=1,
+        img_downscale=-1,
         val_num=1,
         use_cache=False,
         cache_paths=["cache"],
@@ -49,11 +51,7 @@ class PhototourismDataset(Dataset):
         all_rgbs_shape=None,
     ):
         """
-        img_downscale: how much scale to downsample the training images.
-                       The original image sizes are around 500~100, so value of 1 or 2
-                       are recommended.
-                       ATTENTION! Value of 1 will consume large CPU memory,
-                       about 40G for brandenburg gate.
+        img_downscale: longest side to resize preserving aspect ratio
         val_num: number of val images (used for multigpu, validate same image for all gpus)
         use_cache: during data preparation, use precomputed rays (useful to accelerate
                    data loading, especially for multigpu!)
@@ -63,12 +61,12 @@ class PhototourismDataset(Dataset):
         self.split_path = split_path
         self.root_dir = root_dir
         self.split = split
-        assert (
-            img_downscale >= 1
-        ), "image can only be downsampled, please set img_downscale>=1!"
+        #assert (
+        #    img_downscale >= 1
+        #), "image can only be downsampled, please set img_downscale>=1!"
         self.img_downscale = img_downscale
         if split == "val":  # image downscale=1 will cause OOM in val mode
-            self.img_downscale = max(8, self.img_downscale)
+            self.img_downscale = min(1024, self.img_downscale)
         self.val_num = max(1, val_num)  # at least 1
         self.define_transforms()
         self.white_back = False
@@ -359,15 +357,33 @@ class PhototourismDataset(Dataset):
             camdata = read_cameras_binary(
                 os.path.join(self.root_dir, f"dense/{self.sfm_path}/cameras.bin")
             )
+
+            def get_thumbnail_size(img_size, downscale):
+                """
+                Copy of size calculation of PIL.Image.thumbnail
+                img_size: original image size
+                downscale: longest side to downscale to
+                """
+                def round_aspect(number, key):
+                    return max(min(math.floor(number), math.ceil(number), key=key), 1)
+                img_w, img_h = img_size
+                aspect = img_w / img_h
+                x, y = downscale, downscale
+                if 1 >= aspect:
+                    x = round_aspect(downscale * aspect, key=lambda n: abs(aspect - n / y))
+                else:
+                    y = round_aspect(
+                        x / aspect, key=lambda n: 0 if n == 0 else abs(aspect - x / n)
+                    )
+                return x, y
+
             for id_ in self.img_ids:
                 K = np.zeros((3, 3), dtype=np.float32)
                 cam = camdata[imdata[id_].camera_id]
                 if cam.model == "PINHOLE":
                     img_w, img_h = int(cam.params[2] * 2), int(cam.params[3] * 2)
-                    img_w_, img_h_ = (
-                        img_w // self.img_downscale,
-                        img_h // self.img_downscale,
-                    )
+                    img_w_, img_h_ = get_thumbnail_size((img_w, img_h), self.img_downscale)
+
                     K[0, 0] = cam.params[0] * img_w_ / img_w  # fx
                     K[1, 1] = cam.params[1] * img_h_ / img_h  # fy
                     K[0, 2] = cam.params[2] * img_w_ / img_w  # cx
@@ -375,10 +391,7 @@ class PhototourismDataset(Dataset):
                     K[2, 2] = 1
                 elif cam.model == "SIMPLE_RADIAL":
                     img_w, img_h = int(cam.params[1] * 2), int(cam.params[2] * 2)
-                    img_w_, img_h_ = (
-                        img_w // self.img_downscale,
-                        img_h // self.img_downscale,
-                    )
+                    img_w_, img_h_ = get_thumbnail_size((img_w, img_h), self.img_downscale)
                     K[0, 0] = cam.params[0] * img_w_ / img_w  # f
                     K[1, 1] = cam.params[0] * img_h_ / img_h  # f
                     K[0, 2] = cam.params[1] * img_w_ / img_w  # cx
@@ -544,10 +557,9 @@ class PhototourismDataset(Dataset):
                         )
                     ).convert("RGB")
                     img_w, img_h = img.size
-                    if self.img_downscale > 1:
-                        img_w = img_w // self.img_downscale
-                        img_h = img_h // self.img_downscale
-                        img = img.resize((img_w, img_h), Image.LANCZOS)
+                    if self.img_downscale > 0:
+                        img.thumbnail((self.img_downscale, self.img_downscale), Image.LANCZOS)
+                        img_w, img_h = img.size
                     if self.split == "eval":
                         self.img_wh += [torch.LongTensor([img_w, img_h])]
                         self.eval_images += [self.image_paths[id_]]
@@ -597,12 +609,10 @@ class PhototourismDataset(Dataset):
                                 f"{self.semantic_map_path}/{image_name}.npz",
                             )
                         )["arr_0"]
+
                         semantic_map = cv2.resize(
                             semantic_map,
-                            (
-                                semantic_map.shape[1] // self.img_downscale,
-                                semantic_map.shape[0] // self.img_downscale,
-                            ),
+                            (img_h, img_w),
                             interpolation=cv2.INTER_NEAREST,
                         )
                         rays_mask = semantic_map.reshape(-1, 1)
@@ -760,10 +770,10 @@ class PhototourismDataset(Dataset):
                 os.path.join(self.root_dir, "dense/images", self.image_paths[id_])
             ).convert("RGB")
             img_w, img_h = img.size
-            if self.img_downscale > 1:
-                img_w = img_w // self.img_downscale
-                img_h = img_h // self.img_downscale
-                img = img.resize((img_w, img_h), Image.LANCZOS)
+            if self.img_downscale > 0:
+                img.thumbnail((self.img_downscale, self.img_downscale), Image.LANCZOS)
+                img_w, img_h = img.size
+
             img = self.transform(img)  # (3, h, w)
             img = img.view(3, -1).permute(1, 0)  # (h*w, 3) RGB
             sample["rgbs"] = img
@@ -790,12 +800,10 @@ class PhototourismDataset(Dataset):
                         self.root_dir, f"{self.semantic_map_path}/{image_name}.npz"
                     )
                 )["arr_0"]
+
                 semantic_map = cv2.resize(
                     semantic_map,
-                    (
-                        semantic_map.shape[1] // self.img_downscale,
-                        semantic_map.shape[0] // self.img_downscale,
-                    ),
+                    (img_h, img_w),
                     interpolation=cv2.INTER_NEAREST,
                 )
                 rays_mask = semantic_map.reshape(-1, 1)

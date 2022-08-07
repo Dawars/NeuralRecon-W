@@ -18,6 +18,8 @@ def get_opts():
                         help='root directory of dataset')
     parser.add_argument('--gpu', type=int, default=0,
                         help='which gpu to run')
+    parser.add_argument('--img_downscale', type=int, default=-1,
+                        help='rescale images to this size preserving aspect ratio e.g. 1024')
 
     return parser.parse_args()
 
@@ -39,9 +41,13 @@ if __name__ == '__main__':
     model = init_segmentor(config_file, checkpoint_file, device=f'cuda:{args.gpu}')
 
     for img_path in tqdm(image_paths):
-        img = Image.open(os.path.join(args.root_dir, 'dense/images', img_path))
-        image_name = img_path.split('.')[0]
+        img = Image.open(img_path)
+        image_name = img_path.split('/')[-1][:-len(img_path.split('.')[-1])-1]
         img_w, img_h = img.size
+        # resize
+        if args.img_downscale > 0:
+            img.thumbnail((args.img_downscale, args.img_downscale), resample=Image.LANCZOS)
+
         img = np.array(img)
         result = inference_segmentor(model, img)[0] # (H, W)
         model.show_result(img, [result], out_file=os.path.join(args.root_dir, f'segmentation_vis/{image_name}.png'), opacity=0.5)
