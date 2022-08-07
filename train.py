@@ -29,13 +29,13 @@ def main(hparams, config):
     data_module = DataModule(hparams, config)
     
     checkpoint_callback = \
-        ModelCheckpoint(dirpath=os.path.join(f'ckpts/{hparams.exp_name}',
-                                               '{epoch:d}'),
+        ModelCheckpoint(dirpath=os.path.join(hparams.save_path, 'ckpts', hparams.exp_name),
+                        filename='{epoch:d}',
                         monitor='val/psnr',
                         mode='max',
                         save_top_k=-1)
 
-    logger = TestTubeLogger(save_dir="logs",
+    logger = TestTubeLogger(save_dir=os.path.join(hparams.save_path, "logs"),
                             name=hparams.exp_name,
                             debug=False,
                             create_git_tag=False,

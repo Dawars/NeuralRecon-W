@@ -30,6 +30,8 @@ def get_opts():
 
     parser.add_argument('--exp_name', type=str, default='exp',
                         help='experiment name')
+    parser.add_argument('--save_path', type=str, default='./',
+                        help='paths to save checkpoints and logs to')
     parser.add_argument('--refresh_every', type=int, default=1,
                         help='print the progress bar every X steps')
 
