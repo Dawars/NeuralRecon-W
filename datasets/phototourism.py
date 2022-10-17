@@ -34,7 +34,7 @@ class PhototourismDataset(Dataset):
         self,
         root_dir,
         split="train",
-        img_downscale=-1,
+        img_downscale=1,
         val_num=1,
         use_cache=False,
         cache_paths=["cache"],
@@ -51,7 +51,7 @@ class PhototourismDataset(Dataset):
         all_rgbs_shape=None,
     ):
         """
-        img_downscale: longest side to resize preserving aspect ratio
+        img_downscale: longest side to resize preserving aspect ratio or 1 if downscaling
         val_num: number of val images (used for multigpu, validate same image for all gpus)
         use_cache: during data preparation, use precomputed rays (useful to accelerate
                    data loading, especially for multigpu!)
@@ -66,7 +66,10 @@ class PhototourismDataset(Dataset):
         #), "image can only be downsampled, please set img_downscale>=1!"
         self.img_downscale = img_downscale
         if split == "val":  # image downscale=1 will cause OOM in val mode
-            self.img_downscale = min(1024, self.img_downscale)
+            if img_downscale > 1:
+                self.img_downscale = min(128, self.img_downscale)
+            else:  # no downscaling
+                self.img_downscale = 128
         self.val_num = max(1, val_num)  # at least 1
         self.define_transforms()
         self.white_back = False
@@ -364,8 +367,13 @@ class PhototourismDataset(Dataset):
                 img_size: original image size
                 downscale: longest side to downscale to
                 """
+                # no downscaling
+                if downscale <= 1:
+                    return img_size
+
                 def round_aspect(number, key):
                     return max(min(math.floor(number), math.ceil(number), key=key), 1)
+
                 img_w, img_h = img_size
                 aspect = img_w / img_h
                 x, y = downscale, downscale
@@ -557,7 +565,7 @@ class PhototourismDataset(Dataset):
                         )
                     ).convert("RGB")
                     img_w, img_h = img.size
-                    if self.img_downscale > 0:
+                    if self.img_downscale > 1:
                         img.thumbnail((self.img_downscale, self.img_downscale), Image.LANCZOS)
                         img_w, img_h = img.size
                     if self.split == "eval":
@@ -770,7 +778,7 @@ class PhototourismDataset(Dataset):
                 os.path.join(self.root_dir, "dense/images", self.image_paths[id_])
             ).convert("RGB")
             img_w, img_h = img.size
-            if self.img_downscale > 0:
+            if self.img_downscale > 1:
                 img.thumbnail((self.img_downscale, self.img_downscale), Image.LANCZOS)
                 img_w, img_h = img.size
 
