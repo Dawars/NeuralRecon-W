@@ -64,7 +64,8 @@ class DataModule(pl.LightningDataModule):
         print("Initializing data loaders...")
 
         if self.specific_dataset_config.USE_CACHE:
-            if os.path.exists(os.path.join(self.specific_dataset_config.CACHE_DIR, "splits")):
+            cache_dir = os.path.join(self.dataset_config.ROOT_DIR, self.specific_dataset_config.CACHE_DIR, "splits")
+            if os.path.exists(cache_dir):
                 self.train_dataset = self._setup_dataset(
                     dataset, split="train", **kwargs
                 )
