@@ -28,6 +28,7 @@ def main(hparams, config):
 
     data_module = DataModule(hparams, config)
     
+    os.makedirs(hparams.save_path, exist_ok=True)
     checkpoint_callback = \
         ModelCheckpoint(dirpath=os.path.join(hparams.save_path, 'ckpts', hparams.exp_name),
                         filename='{epoch:d}',
@@ -40,7 +41,7 @@ def main(hparams, config):
                             debug=False,
                             create_git_tag=False,
                             log_graph=False)
-    if config.DATASET.DATASET_NAME=='phototourism' and config.DATASET.PHOTOTOURISM.IMG_DOWNSCALE==1:
+    if config.DATASET.DATASET_NAME == 'phototourism' and config.DATASET.PHOTOTOURISM.IMG_DOWNSCALE <= 1:
         replace_sampler_ddp = False
     else:
         replace_sampler_ddp = True
@@ -52,11 +53,11 @@ def main(hparams, config):
                       progress_bar_refresh_rate=hparams.refresh_every,
                       gpus=hparams.num_gpus,
                       num_nodes=hparams.num_nodes,
-                      accelerator='ddp' if hparams.num_gpus>1 else None,
+                      accelerator='ddp' if hparams.num_gpus > 1 else None,
                       num_sanity_val_steps=1,
                       val_check_interval=config.TRAINER.VAL_FREQ,
                       benchmark=True,
-                      profiler="simple" if hparams.num_gpus==1 else None,
+                      profiler="simple" if hparams.num_gpus == 1 else None,
                       replace_sampler_ddp=replace_sampler_ddp,   # need to read all data of local dataset when config.DATASET.PHOTOTOURISM.IMG_DOWNSCALE==1
                       gradient_clip_val=0.99
                       )
