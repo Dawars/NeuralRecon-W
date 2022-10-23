@@ -620,7 +620,7 @@ class PhototourismDataset(Dataset):
 
                         semantic_map = cv2.resize(
                             semantic_map,
-                            (img_h, img_w),
+                            (img_w, img_h),
                             interpolation=cv2.INTER_NEAREST,
                         )
                         rays_mask = semantic_map.reshape(-1, 1)
@@ -811,7 +811,7 @@ class PhototourismDataset(Dataset):
 
                 semantic_map = cv2.resize(
                     semantic_map,
-                    (img_h, img_w),
+                    (img_w, img_h),
                     interpolation=cv2.INTER_NEAREST,
                 )
                 rays_mask = semantic_map.reshape(-1, 1)
