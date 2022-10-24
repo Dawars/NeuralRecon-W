@@ -564,6 +564,9 @@ class PhototourismDataset(Dataset):
                             self.root_dir, "dense/images", self.image_paths[id_]
                         )
                     ).convert("RGB")
+                    # fix 2d kpts scale from colmap
+                    downscale_ratio = self.img_downscale / max(img.size) if self.img_downscale > 1 else 1
+
                     img_w, img_h = img.size
                     if self.img_downscale > 1:
                         img.thumbnail((self.img_downscale, self.img_downscale), Image.LANCZOS)
@@ -591,7 +594,7 @@ class PhototourismDataset(Dataset):
                     point3d_ids = img_colmap.point3D_ids[valid_3d_mask]
                     img_p3d = pts3d_array[point3d_ids].cuda()
                     img_err = error_array[point3d_ids].cuda()
-                    img_2d = torch.from_numpy(img_colmap.xys)[valid_3d_mask]
+                    img_2d = torch.from_numpy(img_colmap.xys)[valid_3d_mask] * downscale_ratio
                     depth_sfm, weight = self.get_colmap_depth(
                         img_p3d, img_2d, img_err, pose, intrinsic, img_w, img_h
                     )
