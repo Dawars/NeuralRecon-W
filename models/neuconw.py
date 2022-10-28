@@ -170,14 +170,6 @@ class RenderingNetwork(nn.Module):
         return x, xyz_encoding_final, view_dirs
 
 
-class SingleVarianceNetwork(nn.Module):
-    def __init__(self, init_val):
-        super(SingleVarianceNetwork, self).__init__()
-        self.register_parameter("variance", nn.Parameter(torch.tensor(init_val)))
-
-    def forward(self, x):
-        return torch.ones([len(x), 1]).to(x.device) * torch.exp(self.variance * 10.0)
-
 
 # This implementation is borrowed from IDR: https://github.com/lioryariv/idr
 class SDFNetwork(nn.Module):
@@ -301,7 +293,6 @@ class NeuconW(nn.Module):
         self,
         sdfNet_config,
         colorNet_config,
-        SNet_config,
         in_channels_a,
         encode_a,
     ):
@@ -309,7 +300,6 @@ class NeuconW(nn.Module):
         super(NeuconW, self).__init__()
         self.sdfNet_config = sdfNet_config
         self.colorNet_config = colorNet_config
-        self.SNet_config = SNet_config
         self.in_channels_a = in_channels_a
         self.encode_a = encode_a
 
@@ -317,9 +307,6 @@ class NeuconW(nn.Module):
         self.sdf_net = SDFNetwork(**self.sdfNet_config)
 
         self.xyz_encoding_final = nn.Linear(512, 512)
-
-        # Static deviation
-        self.deviation_network = SingleVarianceNetwork(**self.SNet_config)
 
         # Static color
         self.color_net = RenderingNetwork(
@@ -350,8 +337,9 @@ class NeuconW(nn.Module):
         static_sdf = sdf_nn_output[:, :1]
         xyz_ = sdf_nn_output[:, 1:]
 
-        # color prediction
+        # sdf gradient
         static_gradient = self.gradient(input_xyz)
+        # color prediction
         static_rgb, xyz_encoding_final, view_encoded = self.color_net(
             input_xyz.view(-1, 3),
             static_gradient.view(-1, 3),
@@ -359,16 +347,9 @@ class NeuconW(nn.Module):
             xyz_,
             input_dir_a,
         )  # (B, 3)
-        # sdf gradient
-        static_deviation = self.deviation_network(torch.zeros([1, 3], device=device))[
-            :, :1
-        ].clamp(
-            1e-6, 1e6
-        )  # (B, 1)
 
         static_out = (
             static_rgb.view(n_rays, n_samples, 3),
-            static_deviation,
             static_sdf.view(n_rays, n_samples),
             static_gradient.view(n_rays, n_samples, 3),
         )

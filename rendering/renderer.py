@@ -1,6 +1,7 @@
 import open3d as o3d
 import torch
 import torch.nn.functional as F
+from torch import nn
 import numpy as np
 from datasets.mask_utils import get_label_id_mapping
 import os
@@ -48,6 +49,15 @@ def sample_pdf(bins, weights, n_samples, det=False):
     return samples
 
 
+class SingleVarianceNetwork(nn.Module):
+    def __init__(self, init_val):
+        super(SingleVarianceNetwork, self).__init__()
+        self.register_parameter("variance", nn.Parameter(torch.tensor(init_val)))
+
+    def forward(self, x):
+        return torch.ones([len(x), 1]).to(x.device) * torch.exp(self.variance * 10.0)
+
+
 class NeuconWRenderer:
     def __init__(
         self,
@@ -74,6 +84,7 @@ class NeuconWRenderer:
         floor_normal=False,
         depth_loss=False,
         floor_labels=None,
+        SNet_config=None,
     ):
 
         self.nerf = nerf
@@ -121,6 +132,12 @@ class NeuconWRenderer:
         self.save_sample = save_sample
         self.trim_sphere = trim_sphere
         self.mesh_mask_list = mesh_mask_list
+
+
+        self.SNet_config = SNet_config
+        # Static deviation
+        self.deviation_network = SingleVarianceNetwork(**self.SNet_config)
+
 
         # If saving sampling of each up sample step,
         # don't forget to start ray from center of image to make sure ray intersect some surface.
@@ -608,7 +625,11 @@ class NeuconWRenderer:
         # print([it.size() for it in inputs])
 
         static_out = self.neuconw(torch.cat(inputs, -1))
-        rgb, inv_s, sdf, gradients = static_out
+        rgb, sdf, gradients = static_out
+
+        inv_s = self.deviation_network(torch.zeros([1, 3], device=device))[:, :1].clamp(
+            1e-6, 1e6
+        )  # (B, 1)
 
         true_cos = (dirs * gradients.reshape(-1, 3)).sum(-1, keepdim=True)
 

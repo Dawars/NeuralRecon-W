@@ -81,7 +81,6 @@ class NeuconWSystem(LightningModule):
         self.neuconw = NeuconW(
             sdfNet_config=self.config.NEUCONW.SDF_CONFIG,
             colorNet_config=self.config.NEUCONW.COLOR_CONFIG,
-            SNet_config=self.config.NEUCONW.S_CONFIG,
             in_channels_a=self.config.NEUCONW.N_A,
             encode_a=self.config.NEUCONW.ENCODE_A,
         )
@@ -130,6 +129,7 @@ class NeuconWSystem(LightningModule):
             sample_range=self.config.NEUCONW.SAMPLE_RANGE,
             boundary_samples=self.config.NEUCONW.BOUNDARY_SAMPLES,
             nerf_far_override=self.config.NEUCONW.NEAR_FAR_OVERRIDE,
+            SNet_config=self.config.NEUCONW.S_CONFIG,
         )
 
         self.models = {"neuconw": self.neuconw, "nerf": self.nerf}
