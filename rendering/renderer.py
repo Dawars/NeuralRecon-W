@@ -304,9 +304,9 @@ class NeuconWRenderer:
         dist = next_z_vals - prev_z_vals
         prev_esti_sdf = mid_sdf - cos_val * dist * 0.5
         next_esti_sdf = mid_sdf + cos_val * dist * 0.5
-        prev_cdf = torch.sigmoid(prev_esti_sdf * inv_s)
-        next_cdf = torch.sigmoid(next_esti_sdf * inv_s)
-        alpha = (prev_cdf - next_cdf + 1e-5) / (prev_cdf + 1e-5)
+
+        p, c = self.distribution.density_func(prev_esti_sdf, next_esti_sdf, inv_s)
+        alpha = (p + 1e-5) / (c + 1e-5)
         # transient alpha
         # alpha = alpha_s + alpha_t
         weights = (
@@ -636,11 +636,7 @@ class NeuconWRenderer:
         estimated_next_sdf = sdf.reshape(-1, 1) + iter_cos * dists.reshape(-1, 1) * 0.5
         estimated_prev_sdf = sdf.reshape(-1, 1) - iter_cos * dists.reshape(-1, 1) * 0.5
 
-        prev_cdf = torch.sigmoid(estimated_prev_sdf * inv_s)
-        next_cdf = torch.sigmoid(estimated_next_sdf * inv_s)
-
-        p = prev_cdf - next_cdf
-        c = prev_cdf
+        p, c = self.distribution.density_func(estimated_prev_sdf, estimated_next_sdf, inv_s)
         alpha = ((p + 1e-5) / (c + 1e-5)).reshape(batch_size, n_samples).clip(0.0, 1.0)
 
         pts_norm = torch.linalg.norm(pts, ord=2, dim=-1, keepdim=True).reshape(
