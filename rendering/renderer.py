@@ -969,5 +969,5 @@ class NeuconWRenderer:
         # print([it.size() for it in inputs])
 
         static_out = self.neuconw(torch.cat(inputs, -1))
-        rgb, inv_s, sdf, gradients = static_out
+        rgb, sdf, gradients = static_out
         return rgb.reshape(num_points, 3)
