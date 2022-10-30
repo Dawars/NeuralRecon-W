@@ -132,7 +132,8 @@ class NeuconWSystem(LightningModule):
             SNet_config=self.config.NEUCONW.S_CONFIG,
         )
 
-        self.models = {"neuconw": self.neuconw, "nerf": self.nerf}
+        self.models = {"neuconw": self.neuconw, "nerf": self.nerf,
+                       "distribution": self.renderer.distribution}
         self.models_to_train += [self.models]
         self.caches = caches
 
