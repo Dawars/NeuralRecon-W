@@ -64,6 +64,7 @@ _CN.NEUCONW.COLOR_CONFIG.weight_norm = True
 _CN.NEUCONW.COLOR_CONFIG.multires_view = 4
 
 _CN.NEUCONW.S_CONFIG = CN()
+_CN.NEUCONW.S_CONFIG.distribution = "logistic"
 _CN.NEUCONW.S_CONFIG.init_val = 0.03
 
 # loss config

@@ -49,7 +49,7 @@ class LogisticDensity(Density):
         return p, c
 
     def get_invs(self, device_tensor):
-        inv_s = torch.ones([len(device_tensor), 1]).to(device_tensor.device) * torch.exp(self.variance * 10.0)
+        inv_s = torch.ones([1, 1]).to(device_tensor.device) * torch.exp(self.variance * 10.0)
         return inv_s
 
 

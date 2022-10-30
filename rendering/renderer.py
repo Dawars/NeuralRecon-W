@@ -6,7 +6,7 @@ import numpy as np
 from datasets.mask_utils import get_label_id_mapping
 import os
 
-from models.density import LogisticDensity
+from models.density import LogisticDensity, LaplaceDensity
 from tools.prepare_data.generate_voxel import (
     get_near_far,
     gen_octree_from_sfm,
@@ -128,7 +128,10 @@ class NeuconWRenderer:
 
         # Static deviation
         self.SNet_config = SNet_config
-        self.distribution = LogisticDensity({'variance': self.SNet_config['init_val']})
+        if self.SNet_config['distribution'] == 'logistic':
+            self.distribution = LogisticDensity({'variance': self.SNet_config['init_val']})
+        elif self.SNet_config['distribution'] == 'laplace':
+            self.distribution = LaplaceDensity({'beta': self.SNet_config['init_val']})
 
         # If saving sampling of each up sample step,
         # don't forget to start ray from center of image to make sure ray intersect some surface.
@@ -277,7 +280,7 @@ class NeuconWRenderer:
         prev_sdf, next_sdf = sdf[:, :-1], sdf[:, 1:]
         prev_z_vals, next_z_vals = z_vals[:, :-1], z_vals[:, 1:]
         mid_sdf = (prev_sdf + next_sdf) * 0.5
-        cos_val = (next_sdf - prev_sdf) / (next_z_vals - prev_z_vals + 1e-5)
+        dist = next_z_vals - prev_z_vals
 
         # ----------------------------------------------------------------------------------------------------------
         # Use min value of [ cos, prev_cos ]
@@ -294,19 +297,27 @@ class NeuconWRenderer:
         # |     \/
         # |
         # ----------------------------------------------------------------------------------------------------------
-        prev_cos_val = torch.cat(
-            [torch.zeros([batch_size, 1], device=device), cos_val[:, :-1]], dim=-1
-        )
-        cos_val = torch.stack([prev_cos_val, cos_val], dim=-1)
-        cos_val, _ = torch.min(cos_val, dim=-1, keepdim=False)
-        cos_val = cos_val.clip(-1e3, 0.0) * inside_sphere
 
-        dist = next_z_vals - prev_z_vals
-        prev_esti_sdf = mid_sdf - cos_val * dist * 0.5
-        next_esti_sdf = mid_sdf + cos_val * dist * 0.5
 
-        p, c = self.distribution.density_func(prev_esti_sdf, next_esti_sdf, inv_s)
-        alpha = (p + 1e-5) / (c + 1e-5)
+        if self.SNet_config['distribution'] == 'logistic':
+            cos_val = (next_sdf - prev_sdf) / (next_z_vals - prev_z_vals + 1e-5)
+
+            prev_cos_val = torch.cat(
+                [torch.zeros([batch_size, 1], device=device), cos_val[:, :-1]], dim=-1
+            )
+            cos_val = torch.stack([prev_cos_val, cos_val], dim=-1)
+            cos_val, _ = torch.min(cos_val, dim=-1, keepdim=False)
+            cos_val = cos_val.clip(-1e3, 0.0) * inside_sphere
+            prev_esti_sdf = mid_sdf - cos_val * dist * 0.5
+            next_esti_sdf = mid_sdf + cos_val * dist * 0.5
+
+            # Eq 13
+            p, c = self.distribution.density_func(prev_esti_sdf, next_esti_sdf, inv_s)
+            alpha = (p + 1e-5) / (c + 1e-5)
+        elif self.SNet_config['distribution'] == 'laplace':
+            sigma = self.distribution.density_func(mid_sdf, inv_s)  # todo midsdf instead of end
+            alpha = (1 - torch.exp(-sigma * dist)).clip(0.0, 1.0)
+
         # transient alpha
         # alpha = alpha_s + alpha_t
         weights = (
@@ -529,13 +540,22 @@ class NeuconWRenderer:
                 )  # N_rays, N_samples, 3
                 sdf = self.sdf(pts).reshape(batch_size, self.n_samples)
                 for i in range(self.up_sample_steps):
+                    if self.SNet_config['distribution'] == 'logistic':
+                        inv_s = 64 * 2 ** (self.s_val_base + i)
+                    elif self.SNet_config['distribution'] == 'laplace':
+                        # Code from volSDF
+                        # Get maximum beta from the upper bound (Lemma 2)
+                        dists = z_vals[:, 1:] - z_vals[:, :-1]
+                        bound = (1.0 / (4.0 * torch.log(torch.tensor(0.1 + 1.0)))) * (dists ** 2.).sum(-1)
+                        beta = torch.sqrt(bound)
+                        inv_s = beta.max()
                     new_z_vals = self.up_sample(
                         rays_o,
                         rays_d,
                         z_vals,
                         sdf,
                         self.n_importance // self.up_sample_steps,
-                        64 * 2 ** (self.s_val_base + i),
+                        inv_s,
                         i,
                     )
                     z_vals, sdf = self.cat_z_vals(
@@ -622,22 +642,28 @@ class NeuconWRenderer:
             1e-6, 1e6
         )  # (B, 1)
 
-        true_cos = (dirs * gradients.reshape(-1, 3)).sum(-1, keepdim=True)
+        if self.SNet_config['distribution'] == 'logistic':
+            true_cos = (dirs * gradients.reshape(-1, 3)).sum(-1, keepdim=True)
 
-        # "cos_anneal_ratio" grows from 0 to 1 in the beginning training iterations. The anneal strategy below makes
-        # the cos value "not dead" at the beginning training iterations, for better convergence.
-        iter_cos = -(
-            F.relu(-true_cos * 0.5 + 0.5) * (1.0 - cos_anneal_ratio)
-            + F.relu(-true_cos) * cos_anneal_ratio
-        )  # always non-positive
+            # "cos_anneal_ratio" grows from 0 to 1 in the beginning training iterations. The anneal strategy below makes
+            # the cos value "not dead" at the beginning training iterations, for better convergence.
+            iter_cos = -(
+                F.relu(-true_cos * 0.5 + 0.5) * (1.0 - cos_anneal_ratio)
+                + F.relu(-true_cos) * cos_anneal_ratio
+            )  # always non-positive
 
-        # print("prev_cdf shape: ", sdf.size(), dists.reshape(-1, 1).size())
-        # Estimate signed distances at section points
-        estimated_next_sdf = sdf.reshape(-1, 1) + iter_cos * dists.reshape(-1, 1) * 0.5
-        estimated_prev_sdf = sdf.reshape(-1, 1) - iter_cos * dists.reshape(-1, 1) * 0.5
+            # print("prev_cdf shape: ", sdf.size(), dists.reshape(-1, 1).size())
+            # Estimate signed distances at section points
+            estimated_next_sdf = sdf.reshape(-1, 1) + iter_cos * dists.reshape(-1, 1) * 0.5
+            estimated_prev_sdf = sdf.reshape(-1, 1) - iter_cos * dists.reshape(-1, 1) * 0.5
 
-        p, c = self.distribution.density_func(estimated_prev_sdf, estimated_next_sdf, inv_s)
-        alpha = ((p + 1e-5) / (c + 1e-5)).reshape(batch_size, n_samples).clip(0.0, 1.0)
+            p, c = self.distribution.density_func(estimated_prev_sdf, estimated_next_sdf, inv_s)
+            alpha = ((p + 1e-5) / (c + 1e-5)).reshape(batch_size, n_samples).clip(0.0, 1.0)
+        elif self.SNet_config['distribution'] == 'laplace':
+            sigma = self.distribution.density_func(sdf)
+            c = sigma
+            inv_s = self.distribution.get_beta(sdf).reshape(1, 1)
+            alpha = (1 - torch.exp(-sigma * dists)).reshape(batch_size, n_samples).clip(0.0, 1.0)
 
         pts_norm = torch.linalg.norm(pts, ord=2, dim=-1, keepdim=True).reshape(
             batch_size, n_samples
