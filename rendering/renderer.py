@@ -7,6 +7,7 @@ from datasets.mask_utils import get_label_id_mapping
 import os
 
 from models.density import LogisticDensity, LaplaceDensity
+from rendering.ray_sampler import ErrorBoundSampler, NeuSSampler
 from tools.prepare_data.generate_voxel import (
     get_near_far,
     gen_octree_from_sfm,
@@ -15,40 +16,6 @@ from tools.prepare_data.generate_voxel import (
 import yaml
 
 
-def sample_pdf(bins, weights, n_samples, det=False):
-    # This implementation is from NeRF
-    # Get pdf
-    device = weights.device
-    weights = weights + 1e-5  # prevent nans
-    pdf = weights / torch.sum(weights, -1, keepdim=True)
-    cdf = torch.cumsum(pdf, -1)
-    cdf = torch.cat([torch.zeros_like(cdf[..., :1]), cdf], -1)
-    # Take uniform samples
-    if det:
-        u = torch.linspace(
-            0.0 + 0.5 / n_samples, 1.0 - 0.5 / n_samples, steps=n_samples, device=device
-        )
-        u = u.expand(list(cdf.shape[:-1]) + [n_samples])
-    else:
-        u = torch.rand(list(cdf.shape[:-1], device=device) + [n_samples])
-
-    # Invert CDF
-    u = u.contiguous()
-    inds = torch.searchsorted(cdf, u, right=True)
-    below = torch.max(torch.zeros_like(inds - 1), inds - 1)
-    above = torch.min((cdf.shape[-1] - 1) * torch.ones_like(inds), inds)
-    inds_g = torch.stack([below, above], -1)  # (batch, N_samples, 2)
-
-    matched_shape = [inds_g.shape[0], inds_g.shape[1], cdf.shape[-1]]
-    cdf_g = torch.gather(cdf.unsqueeze(1).expand(matched_shape), 2, inds_g)
-    bins_g = torch.gather(bins.unsqueeze(1).expand(matched_shape), 2, inds_g)
-
-    denom = cdf_g[..., 1] - cdf_g[..., 0]
-    denom = torch.where(denom < 1e-5, torch.ones_like(denom), denom)
-    t = (u - cdf_g[..., 0]) / denom
-    samples = bins_g[..., 0] + t * (bins_g[..., 1] - bins_g[..., 0])
-
-    return samples
 
 
 class NeuconWRenderer:
@@ -130,8 +97,11 @@ class NeuconWRenderer:
         self.SNet_config = SNet_config
         if self.SNet_config['distribution'] == 'logistic':
             self.distribution = LogisticDensity({'variance': self.SNet_config['init_val']})
-        elif self.SNet_config['distribution'] == 'laplace':
-            self.distribution = LaplaceDensity({'beta': self.SNet_config['init_val']})
+            self.ray_sampler = NeuSSampler(self.n_samples, self.n_importance, self.perturb, self.neuconw, self.distribution, self.up_sample_steps, self.s_val_base)
+
+        # elif self.SNet_config['distribution'] == 'laplace':
+        #     self.distribution = LaplaceDensity({'beta': self.SNet_config['init_val']})
+        #     self.ray_sampler = ErrorBoundSampler(self.scene_bounding_sphere, **conf.get_config('ray_sampler'))
 
         # If saving sampling of each up sample step,
         # don't forget to start ray from center of image to make sure ray intersect some surface.
@@ -265,122 +235,6 @@ class NeuconWRenderer:
             f"samples/{dir_name}/step_{self.save_step_itr}/{save_name}.ply", pcd
         )
 
-    def up_sample(self, rays_o, rays_d, z_vals, sdf, n_importance, inv_s, step):
-        """
-        Up sampling give a fixed inv_s
-        """
-        device = sdf.device
-        batch_size, n_samples = z_vals.shape
-        pts = (
-            rays_o[:, None, :] + rays_d[:, None, :] * z_vals[..., :, None]
-        )  # n_rays, n_samples, 3
-        radius = torch.linalg.norm(pts, ord=2, dim=-1, keepdim=False)
-        inside_sphere = (radius[:, :-1] < 1.0) | (radius[:, 1:] < 1.0)
-        sdf = sdf.reshape(batch_size, n_samples)
-        prev_sdf, next_sdf = sdf[:, :-1], sdf[:, 1:]
-        prev_z_vals, next_z_vals = z_vals[:, :-1], z_vals[:, 1:]
-        mid_sdf = (prev_sdf + next_sdf) * 0.5
-        dist = next_z_vals - prev_z_vals
-
-        # ----------------------------------------------------------------------------------------------------------
-        # Use min value of [ cos, prev_cos ]
-        # Though it makes the sampling (not rendering) a little bit biased, this strategy can make the sampling more
-        # robust when meeting situations like below:
-        #
-        # SDF
-        # ^
-        # |\          -----x----...
-        # | \        /
-        # |  x      x
-        # |---\----/-------------> 0 level
-        # |    \  /
-        # |     \/
-        # |
-        # ----------------------------------------------------------------------------------------------------------
-
-
-        if self.SNet_config['distribution'] == 'logistic':
-            cos_val = (next_sdf - prev_sdf) / (next_z_vals - prev_z_vals + 1e-5)
-
-            prev_cos_val = torch.cat(
-                [torch.zeros([batch_size, 1], device=device), cos_val[:, :-1]], dim=-1
-            )
-            cos_val = torch.stack([prev_cos_val, cos_val], dim=-1)
-            cos_val, _ = torch.min(cos_val, dim=-1, keepdim=False)
-            cos_val = cos_val.clip(-1e3, 0.0) * inside_sphere
-            prev_esti_sdf = mid_sdf - cos_val * dist * 0.5
-            next_esti_sdf = mid_sdf + cos_val * dist * 0.5
-
-            # Eq 13
-            p, c = self.distribution.density_func(prev_esti_sdf, next_esti_sdf, inv_s)
-            alpha = (p + 1e-5) / (c + 1e-5)
-        elif self.SNet_config['distribution'] == 'laplace':
-            sigma = self.distribution.density_func(mid_sdf, inv_s)  # todo midsdf instead of end
-            alpha = (1 - torch.exp(-sigma * dist)).clip(0.0, 1.0)
-
-        # transient alpha
-        # alpha = alpha_s + alpha_t
-        weights = (
-            alpha
-            * torch.cumprod(
-                torch.cat(
-                    [torch.ones([batch_size, 1], device=device), 1.0 - alpha + 1e-7], -1
-                ),
-                -1,
-            )[:, :-1]
-        )
-
-        z_samples = sample_pdf(z_vals, weights, n_importance, det=True).detach()
-
-        if self.save_step_sample:
-            # # start points
-            # self.save_samples_step(pts[:, :-1][weights < 0.1].view(-1, 3), f"{step}_{0.0}_{0.1}")
-            # # end points
-            # self.save_samples_step(pts[:, :-1][((weights > 0.1) & (weights < 0.9))].view(-1, 3), f"{step}_{0.1}_{0.9}")
-            # self.save_samples_step(pts[:, :-1].reshape(-1, 3), f"{step}_all")
-
-            # colored
-            self.save_samples_step(
-                pts[:, :-1].reshape(-1, 3),
-                weights.reshape(
-                    -1,
-                ),
-                f"{step}_colored",
-            )
-
-            pts_new = rays_o[:, None, :] + rays_d[:, None, :] * z_samples[..., :, None]
-            self.save_samples_step(
-                pts_new.reshape(-1, 3),
-                torch.zeros_like(z_samples).reshape(
-                    -1,
-                ),
-                f"{step}",
-                dir_name="new_z",
-            )
-        return z_samples
-
-    def cat_z_vals(self, rays_o, rays_d, z_vals, new_z_vals, sdf, last=False):
-        batch_size, n_samples = z_vals.shape
-        _, n_importance = new_z_vals.shape
-        pts = rays_o[:, None, :] + rays_d[:, None, :] * new_z_vals[..., :, None]
-        z_vals = torch.cat([z_vals, new_z_vals], dim=-1)
-        z_vals, index = torch.sort(z_vals, dim=-1)
-
-        if not last:
-            _n_rays, _n_samples, _ = pts.size()
-            new_sdf = self.sdf(pts).reshape(_n_rays, _n_samples)
-            # # print("cat_z_vals ", new_sdf.size(), sdf.size())
-            sdf = torch.cat([sdf, new_sdf], dim=-1)
-            xx = (
-                torch.arange(batch_size)[:, None]
-                .expand(batch_size, n_samples + n_importance)
-                .reshape(-1)
-            )
-            index = index.reshape(-1)
-            sdf = sdf[(xx, index)].reshape(batch_size, n_samples + n_importance)
-
-        return z_vals, sdf
-
     def render_depth(self, alphas, z_vals):
         # print('z_vals: {}, alphas: {}'.format(z_vals.size(), alphas.size()))
         transmittance = torch.cumprod(
@@ -504,21 +358,13 @@ class NeuconWRenderer:
                 self.fine_octree_data, rays_o, rays_d, near, far
             )
 
-        sample_dist = (sample_far - sample_near) / self.n_samples
-        z_vals = torch.linspace(0.0, 1.0, self.n_samples, device=device)
-        z_vals = sample_near + (sample_far - sample_near) * z_vals[None, :]
-
+        # background samples
         z_vals_outside = None
         if self.render_bg and self.n_outside > 0:
             z_vals_outside = torch.linspace(
                 1e-3, 1.0 - 1.0 / (self.n_outside + 1.0), self.n_outside, device=device
             )
-
-        if perturb > 0:
-            t_rand = torch.rand([batch_size, 1], device=device) - 0.5
-            z_vals = z_vals + (sample_far - sample_near) * t_rand * 2.0 / self.n_samples
-
-            if self.render_bg and self.n_outside > 0:
+            if perturb > 0:
                 mids = 0.5 * (z_vals_outside[..., 1:] + z_vals_outside[..., :-1])
                 upper = torch.cat([mids, z_vals_outside[..., -1:]], -1)
                 lower = torch.cat([z_vals_outside[..., :1], mids], -1)
@@ -527,46 +373,14 @@ class NeuconWRenderer:
                 )
                 z_vals_outside = lower[None, :] + (upper - lower)[None, :] * t_rand
 
-        if self.render_bg and self.n_outside > 0:
-            z_vals_outside = (
-                far / torch.flip(z_vals_outside, dims=[-1]) + 1.0 / self.n_samples
-            )
+                z_vals_outside = (
+                        far / torch.flip(z_vals_outside, dims=[-1]) + 1.0 / self.n_samples
+                )
 
-        # upsample inside voxel
-        if self.n_importance > 0:
-            with torch.no_grad():
-                pts = (
-                    rays_o[:, None, :] + rays_d[:, None, :] * z_vals[..., :, None]
-                )  # N_rays, N_samples, 3
-                sdf = self.sdf(pts).reshape(batch_size, self.n_samples)
-                for i in range(self.up_sample_steps):
-                    if self.SNet_config['distribution'] == 'logistic':
-                        inv_s = 64 * 2 ** (self.s_val_base + i)
-                    elif self.SNet_config['distribution'] == 'laplace':
-                        # Code from volSDF
-                        # Get maximum beta from the upper bound (Lemma 2)
-                        dists = z_vals[:, 1:] - z_vals[:, :-1]
-                        bound = (1.0 / (4.0 * torch.log(torch.tensor(0.1 + 1.0)))) * (dists ** 2.).sum(-1)
-                        beta = torch.sqrt(bound)
-                        inv_s = beta.max()
-                    new_z_vals = self.up_sample(
-                        rays_o,
-                        rays_d,
-                        z_vals,
-                        sdf,
-                        self.n_importance // self.up_sample_steps,
-                        inv_s,
-                        i,
-                    )
-                    z_vals, sdf = self.cat_z_vals(
-                        rays_o,
-                        rays_d,
-                        z_vals,
-                        new_z_vals,
-                        sdf,
-                        last=(i + 1 == self.up_sample_steps),
-                    )
-            n_samples = self.n_samples + self.n_importance
+        # inside samples
+        sample_dist = (sample_far - sample_near) / self.n_samples
+        z_vals = self.ray_sampler.get_z_vals(rays_o, rays_d, near, far)
+        n_samples = self.n_samples + self.n_importance
 
         if self.save_step_sample:
             self.save_step_itr += 1
