@@ -87,7 +87,7 @@ def extract_mesh(dim, chunk, scene_radius, scene_origin, origin=None, radius=1.0
     if local_rank == 0:
         sdf_ = torch.cat(sdf_gathered, 0).cpu().numpy()
         sdf = sdf_[:xyz_.shape[0]]
-        print(f'max sdf: {np.max(sdf.reshape(-1))}, min sdf: {np.min(sdf.reshape(-1))}', np.max(sdf.reshape(-1)))
+        print(f'max sdf: {np.max(sdf.reshape(-1))}, min sdf: {np.min(sdf.reshape(-1))}')
         print(f'start marching cubes')
 
         if sparse_data is None:

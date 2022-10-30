@@ -67,9 +67,9 @@ class PhototourismDataset(Dataset):
         self.img_downscale = img_downscale
         if split == "val":  # image downscale=1 will cause OOM in val mode
             if img_downscale > 1:
-                self.img_downscale = min(128, self.img_downscale)
+                self.img_downscale = min(512, self.img_downscale)
             else:  # no downscaling
-                self.img_downscale = 128
+                self.img_downscale = 512
         self.val_num = max(1, val_num)  # at least 1
         self.define_transforms()
         self.white_back = False
@@ -88,6 +88,8 @@ class PhototourismDataset(Dataset):
         elif scene_name == 'palacio_de_bellas_artes':
             depth_percent = 0.4
         elif scene_name in ['lincoln_memorial', 'pantheon_exterior']:
+            depth_percent = 0.0
+        else:
             depth_percent = 0.0
         
         self.depth_percent = depth_percent

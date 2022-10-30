@@ -261,7 +261,7 @@ class NeuconWSystem(LightningModule):
         # filter with threshold
         sparse_pc_sfm = xyz_sfm[sdf <= threshold].cpu().numpy()
         print(
-            f"sdf filtered points {sparse_pc_sfm.shape[0]}, max sdf: {torch.min(sdf)}, min sdf: {torch.max(sdf)}"
+            f"sdf filtered points {sparse_pc_sfm.shape[0]}, max sdf: {torch.max(sdf)}, min sdf: {torch.min(sdf)}"
         )
 
         return sparse_pc_sfm, train_voxel_size
