@@ -638,10 +638,6 @@ class NeuconWRenderer:
         static_out = self.neuconw(torch.cat(inputs, -1))
         rgb, sdf, gradients = static_out
 
-        inv_s = self.distribution.get_invs(torch.zeros([1, 3], device=device))[:, :1].clamp(
-            1e-6, 1e6
-        )  # (B, 1)
-
         if self.SNet_config['distribution'] == 'logistic':
             true_cos = (dirs * gradients.reshape(-1, 3)).sum(-1, keepdim=True)
 
@@ -656,6 +652,10 @@ class NeuconWRenderer:
             # Estimate signed distances at section points
             estimated_next_sdf = sdf.reshape(-1, 1) + iter_cos * dists.reshape(-1, 1) * 0.5
             estimated_prev_sdf = sdf.reshape(-1, 1) - iter_cos * dists.reshape(-1, 1) * 0.5
+
+            inv_s = self.distribution.get_invs(torch.zeros([1, 3], device=device))[:, :1].clamp(
+                1e-6, 1e6
+            )  # (B, 1)
 
             p, c = self.distribution.density_func(estimated_prev_sdf, estimated_next_sdf, inv_s)
             alpha = ((p + 1e-5) / (c + 1e-5)).reshape(batch_size, n_samples).clip(0.0, 1.0)
