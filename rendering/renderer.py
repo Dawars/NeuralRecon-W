@@ -660,9 +660,9 @@ class NeuconWRenderer:
             p, c = self.distribution.density_func(estimated_prev_sdf, estimated_next_sdf, inv_s)
             alpha = ((p + 1e-5) / (c + 1e-5)).reshape(batch_size, n_samples).clip(0.0, 1.0)
         elif self.SNet_config['distribution'] == 'laplace':
-            sigma = self.distribution.density_func(sdf)
-            c = sigma
             inv_s = self.distribution.get_beta(sdf).reshape(1, 1)
+            sigma = self.distribution.density_func(sdf, inv_s)
+            c = sigma
             alpha = (1 - torch.exp(-sigma * dists)).reshape(batch_size, n_samples).clip(0.0, 1.0)
 
         pts_norm = torch.linalg.norm(pts, ord=2, dim=-1, keepdim=True).reshape(
