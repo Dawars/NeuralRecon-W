@@ -97,11 +97,12 @@ class NeuconWRenderer:
         self.SNet_config = SNet_config
         if self.SNet_config['distribution'] == 'logistic':
             self.distribution = LogisticDensity({'variance': self.SNet_config['init_val']})
-            self.ray_sampler = NeuSSampler(self.n_samples, self.n_importance, self.perturb, self.neuconw.sdf, self.distribution, self.up_sample_steps, self.s_val_base)
+            self.ray_sampler = NeuSSampler(self.n_samples, self.n_importance, self.perturb, self.neuconw.sdf,
+                                           self.distribution, self.up_sample_steps, self.s_val_base)
 
-        # elif self.SNet_config['distribution'] == 'laplace':
-        #     self.distribution = LaplaceDensity({'beta': self.SNet_config['init_val']})
-        #     self.ray_sampler = ErrorBoundSampler(self.scene_bounding_sphere, **conf.get_config('ray_sampler'))
+        elif self.SNet_config['distribution'] == 'laplace':
+            self.distribution = LaplaceDensity({'beta': self.SNet_config['init_val']})
+            self.ray_sampler = ErrorBoundSampler(self.neuconw.sdf, self.distribution, self.perturb)
 
         # If saving sampling of each up sample step,
         # don't forget to start ray from center of image to make sure ray intersect some surface.
@@ -380,7 +381,8 @@ class NeuconWRenderer:
         # inside samples
         sample_dist = (sample_far - sample_near) / self.n_samples
         z_vals = self.ray_sampler.get_z_vals(rays_o, rays_d, sample_near, sample_far)
-        n_samples = self.n_samples + self.n_importance
+        n_samples = z_vals.shape[1]
+        # n_samples = self.n_samples + self.n_importance
 
         if self.save_step_sample:
             self.save_step_itr += 1
