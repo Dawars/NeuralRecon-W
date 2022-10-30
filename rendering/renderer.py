@@ -97,7 +97,7 @@ class NeuconWRenderer:
         self.SNet_config = SNet_config
         if self.SNet_config['distribution'] == 'logistic':
             self.distribution = LogisticDensity({'variance': self.SNet_config['init_val']})
-            self.ray_sampler = NeuSSampler(self.n_samples, self.n_importance, self.perturb, self.neuconw, self.distribution, self.up_sample_steps, self.s_val_base)
+            self.ray_sampler = NeuSSampler(self.n_samples, self.n_importance, self.perturb, self.neuconw.sdf, self.distribution, self.up_sample_steps, self.s_val_base)
 
         # elif self.SNet_config['distribution'] == 'laplace':
         #     self.distribution = LaplaceDensity({'beta': self.SNet_config['init_val']})
@@ -379,7 +379,7 @@ class NeuconWRenderer:
 
         # inside samples
         sample_dist = (sample_far - sample_near) / self.n_samples
-        z_vals = self.ray_sampler.get_z_vals(rays_o, rays_d, near, far)
+        z_vals = self.ray_sampler.get_z_vals(rays_o, rays_d, sample_near, sample_far)
         n_samples = self.n_samples + self.n_importance
 
         if self.save_step_sample:
