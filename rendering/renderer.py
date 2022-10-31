@@ -97,12 +97,12 @@ class NeuconWRenderer:
         self.SNet_config = SNet_config
         if self.SNet_config['distribution'] == 'logistic':
             self.distribution = LogisticDensity({'variance': self.SNet_config['init_val']})
-            self.ray_sampler = NeuSSampler(self.n_samples, self.n_importance, self.perturb, self.neuconw.sdf,
+            self.ray_sampler = NeuSSampler(self.n_samples, self.n_importance, self.perturb, self.neuconw,
                                            self.distribution, self.up_sample_steps, self.s_val_base)
 
         elif self.SNet_config['distribution'] == 'laplace':
             self.distribution = LaplaceDensity({'beta': self.SNet_config['init_val']})
-            self.ray_sampler = ErrorBoundSampler(self.neuconw.sdf, self.distribution, self.perturb)
+            self.ray_sampler = ErrorBoundSampler(self.neuconw, self.distribution, self.perturb)
 
         # If saving sampling of each up sample step,
         # don't forget to start ray from center of image to make sure ray intersect some surface.

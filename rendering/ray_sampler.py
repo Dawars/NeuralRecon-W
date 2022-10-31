@@ -69,12 +69,12 @@ class UniformSampler(RaySampler):
 
 
 class NeuSSampler(RaySampler):
-    def __init__(self, n_samples, n_importance, perturb, sdf_model, density_model, up_sample_steps, s_val_base):
+    def __init__(self, n_samples, n_importance, perturb, neuconw, density_model, up_sample_steps, s_val_base):
         super().__init__(n_samples, perturb)
 
         self.n_importance = n_importance
 
-        self.sdf_model = sdf_model
+        self.neuconw = neuconw
         self.density_model = density_model
 
         self.up_sample_steps = up_sample_steps
@@ -180,7 +180,7 @@ class NeuSSampler(RaySampler):
 
         if not last:
             _n_rays, _n_samples, _ = pts.size()
-            new_sdf = self.sdf_model(pts).reshape(_n_rays, _n_samples)  # todo why inference here?
+            new_sdf = self.neuconw.sdf(pts).reshape(_n_rays, _n_samples)  # todo why inference here?
             # # print("cat_z_vals ", new_sdf.size(), sdf.size())
             sdf = torch.cat([sdf, new_sdf], dim=-1)
             xx = (
@@ -205,7 +205,7 @@ class NeuSSampler(RaySampler):
                 pts = (
                         rays_o[:, None, :] + rays_d[:, None, :] * z_vals[..., :, None]
                 )  # N_rays, N_samples, 3
-                sdf = self.sdf_model(pts).reshape(batch_size, self.n_samples)
+                sdf = self.neuconw.sdf(pts).reshape(batch_size, self.n_samples)
                 for i in range(self.up_sample_steps):
                     inv_s = 64 * 2 ** (self.s_val_base + i)
                     new_z_vals = self.up_sample(
@@ -230,7 +230,7 @@ class NeuSSampler(RaySampler):
 
 
 class ErrorBoundSampler(RaySampler):
-    def __init__(self, sdf_model, density_model,perturb,
+    def __init__(self, neuconw, density_model,perturb,
                  n_samples=64, n_samples_eval=128, n_samples_extra=32,
                  eps=0.1, beta_iters=10, max_total_iters=5, add_tiny=0.0):
         """
@@ -245,7 +245,7 @@ class ErrorBoundSampler(RaySampler):
 
         self.n_samples_extra = n_samples_extra
 
-        self.sdf_model = sdf_model
+        self.neuconw = neuconw
         self.density_model = density_model
 
         self.eps = eps
@@ -276,7 +276,7 @@ class ErrorBoundSampler(RaySampler):
 
             # Calculating the SDF only for the new sampled points
             with torch.no_grad():
-                samples_sdf = self.sdf_model(points_flat)
+                samples_sdf = self.neuconw.sdf(points_flat)
             if samples_idx is not None:
                 sdf_merge = torch.cat([sdf.reshape(-1, z_vals.shape[1] - samples.shape[1]),
                                        samples_sdf.reshape(-1, samples.shape[1])], -1)
