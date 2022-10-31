@@ -38,8 +38,10 @@ def sample_pdf(bins, weights, n_samples, det=False):
     return samples
 
 
-class RaySampler(metaclass=abc.ABCMeta):
+class RaySampler(torch.nn.Module, metaclass=abc.ABCMeta):
     def __init__(self, n_samples, perturb):
+        super(torch.nn.Module).__init__()
+        super().__init__()
         self.n_samples = n_samples
         self.perturb = perturb
 
