@@ -8,8 +8,10 @@ from lightning_modules.neuconw_system import NeuconWSystem
 # pytorch-lightning
 import pytorch_lightning as pl
 from pytorch_lightning.callbacks import ModelCheckpoint
+from pytorch_lightning.callbacks import DeviceStatsMonitor
+from pytorch_lightning.profiler import AdvancedProfiler
 from pytorch_lightning import Trainer
-from pytorch_lightning.loggers import TestTubeLogger
+from pytorch_lightning.loggers import TensorBoardLogger
 
 from config.defaults import get_cfg_defaults
 
@@ -36,29 +38,30 @@ def main(hparams, config):
                         mode='max',
                         save_top_k=-1)
 
-    logger = TestTubeLogger(save_dir=os.path.join(hparams.save_path, "logs"),
-                            name=hparams.exp_name,
-                            debug=False,
-                            create_git_tag=False,
-                            log_graph=False)
+    logger = TensorBoardLogger(save_dir=os.path.join(hparams.save_path, "logs"),
+                               name=hparams.exp_name,
+                               log_graph=False)
     if config.DATASET.DATASET_NAME == 'phototourism' and config.DATASET.PHOTOTOURISM.IMG_DOWNSCALE <= 1:
         replace_sampler_ddp = False
     else:
         replace_sampler_ddp = True
+
+
+    # profiler = "simple" if hparams.num_gpus == 1 else None
+    profiler = AdvancedProfiler(dirpath=".", filename="perf_logs")
+
     trainer = Trainer(max_epochs=hparams.num_epochs,
-                      callbacks=[checkpoint_callback],
+                      callbacks=[checkpoint_callback, DeviceStatsMonitor(cpu_stats=True)],
                       resume_from_checkpoint=hparams.ckpt_path,
                       logger=logger,
-                      weights_summary=None,
-                      progress_bar_refresh_rate=hparams.refresh_every,
                       gpus=hparams.num_gpus,
                       num_nodes=hparams.num_nodes,
                       accelerator='ddp' if hparams.num_gpus > 1 else None,
                       num_sanity_val_steps=1,
                       val_check_interval=config.TRAINER.VAL_FREQ,
                       benchmark=True,
-                      profiler="simple" if hparams.num_gpus == 1 else None,
-                      replace_sampler_ddp=replace_sampler_ddp,   # need to read all data of local dataset when config.DATASET.PHOTOTOURISM.IMG_DOWNSCALE==1
+                      profiler=profiler,
+                      replace_sampler_ddp=replace_sampler_ddp,  # need to read all data of local dataset when config.DATASET.PHOTOTOURISM.IMG_DOWNSCALE==1
                       gradient_clip_val=0.99
                       )
 
