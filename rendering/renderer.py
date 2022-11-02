@@ -492,9 +492,9 @@ class NeuconWRenderer:
         return z_vals
 
     def volsdf_sample(self, rays_o, rays_d, near, far):
-        n_samples = 64//4
-        n_samples_eval = 128//4
-        n_samples_extra = 32//4
+        n_samples = 64//4           # 16
+        n_samples_eval = 128//4     # 32
+        n_samples_extra = 32//4     # 8
         eps = 0.1
         beta_iters = 10
         max_total_iters = 5
@@ -534,8 +534,8 @@ class NeuconWRenderer:
             d = sdf.reshape(z_vals.shape)
             dists = z_vals[:, 1:] - z_vals[:, :-1]
             a, b, c = dists, d[:, :-1].abs(), d[:, 1:].abs()
-            first_cond = a.pow(2) + b.pow(2) <= c.pow(2)
-            second_cond = a.pow(2) + c.pow(2) <= b.pow(2)
+            first_cond = (a.pow(2) + b.pow(2)) <= c.pow(2)
+            second_cond = (a.pow(2) + c.pow(2)) <= b.pow(2)
             d_star = torch.zeros(z_vals.shape[0], z_vals.shape[1] - 1, device=device)
             d_star[first_cond] = b[first_cond]
             d_star[second_cond] = c[second_cond]
