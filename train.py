@@ -31,14 +31,15 @@ def main(hparams, config):
     data_module = DataModule(hparams, config)
     
     os.makedirs(hparams.save_path, exist_ok=True)
+    os.makedirs(os.path.join(hparams.save_path, hparams.exp_name, 'ckpts'), exist_ok=True)
     checkpoint_callback = \
-        ModelCheckpoint(dirpath=os.path.join(hparams.save_path, 'ckpts', hparams.exp_name),
+        ModelCheckpoint(dirpath=os.path.join(hparams.save_path, hparams.exp_name, 'ckpts'),
                         filename='{epoch:d}',
                         monitor='val/psnr',
                         mode='max',
                         save_top_k=-1)
 
-    logger = TensorBoardLogger(save_dir=os.path.join(hparams.save_path, "logs"),
+    logger = TensorBoardLogger(save_dir=hparams.save_path,
                                name=hparams.exp_name,
                                log_graph=False)
     if config.DATASET.DATASET_NAME == 'phototourism' and config.DATASET.PHOTOTOURISM.IMG_DOWNSCALE <= 1:
@@ -47,8 +48,8 @@ def main(hparams, config):
         replace_sampler_ddp = True
 
 
-    # profiler = "simple" if hparams.num_gpus == 1 else None
-    profiler = AdvancedProfiler(dirpath=".", filename="perf_logs")
+    profiler = "simple" if hparams.num_gpus == 1 else None
+    # profiler = AdvancedProfiler(dirpath=".", filename="perf_logs")
 
     trainer = Trainer(max_epochs=hparams.num_epochs,
                       callbacks=[checkpoint_callback, DeviceStatsMonitor(cpu_stats=True)],
