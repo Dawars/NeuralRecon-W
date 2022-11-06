@@ -491,6 +491,41 @@ class NeuconWRenderer:
 
         return z_vals
 
+    def neus_sample(self, rays_o, rays_d, near, far):
+        batch_size = len(rays_o)
+
+        # uniform samples
+        z_vals = self.uniform_sample(rays_o, rays_d, near, far, self.n_samples)
+
+        # upsample inside voxel
+        if self.n_importance > 0:
+            with torch.no_grad():
+                pts = (
+                        rays_o[:, None, :] + rays_d[:, None, :] * z_vals[..., :, None]
+                )  # N_rays, N_samples, 3
+                sdf = self.sdf(pts).reshape(batch_size, self.n_samples)
+                for i in range(self.up_sample_steps):
+                    inv_s = 64 * 2 ** (self.s_val_base + i)
+                    new_z_vals = self.up_sample(
+                        rays_o,
+                        rays_d,
+                        z_vals,
+                        sdf,
+                        self.n_importance // self.up_sample_steps,
+                        inv_s,
+                        i,
+                    )
+                    z_vals, sdf = self.cat_z_vals(
+                        rays_o,
+                        rays_d,
+                        z_vals,
+                        new_z_vals,
+                        sdf,
+                        last=(i + 1 == self.up_sample_steps),
+                    )
+
+        return z_vals
+
     def volsdf_sample(self, rays_o, rays_d, near, far):
         n_samples = 64//4           # 16
         n_samples_eval = 128//4     # 32
@@ -710,6 +745,8 @@ class NeuconWRenderer:
 
         if self.SNet_config['distribution'] == 'laplace':
             z_vals = self.volsdf_sample(rays_o, rays_d, near, far)
+        if self.SNet_config['distribution'] == 'logistic':
+            z_vals = self.neus_sample(rays_o, rays_d, near, far)
         n_samples = z_vals.shape[1]
         # n_samples = self.n_samples + self.n_importance
 
@@ -758,7 +795,10 @@ class NeuconWRenderer:
         # Section length
         dists = z_vals[..., 1:] - z_vals[..., :-1]
         dists = torch.cat([dists, sample_dist.expand(dists[..., -1:].shape)], -1)
-        mid_z_vals = z_vals + dists * 0.5
+        if self.SNet_config['distribution'] == 'logistic':
+            mid_z_vals = z_vals + dists * 0.5
+        elif self.SNet_config['distribution'] == 'laplace':
+            mid_z_vals = z_vals
 
         if torch.isnan(dists).any():
             idx = torch.isnan(dists).nonzero()
