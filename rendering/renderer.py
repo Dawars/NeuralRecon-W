@@ -846,12 +846,13 @@ class NeuconWRenderer:
             inv_s = self.distribution.get_invs(torch.zeros([1, 3], device=device))[:, :1].clamp(
                 1e-6, 1e6
             )  # (B, 1)
+            s_val = 1.0 / inv_s
 
             p, c = self.distribution.density_func(estimated_prev_sdf, estimated_next_sdf, inv_s)
             alpha = ((p + 1e-5) / (c + 1e-5)).reshape(batch_size, n_samples).clip(0.0, 1.0)
         elif self.SNet_config['distribution'] == 'laplace':
-            inv_s = self.distribution.get_beta(sdf).reshape(1, 1)
-            sigma = self.distribution.density_func(sdf, inv_s)
+            s_val = self.distribution.get_beta(sdf).reshape(1, 1)
+            sigma = self.distribution.density_func(sdf, s_val)
             c = sigma
             alpha = (1 - torch.exp(-sigma * dists)).reshape(batch_size, n_samples).clip(0.0, 1.0)
 
@@ -994,7 +995,7 @@ class NeuconWRenderer:
             "color_bg": color_bg if color_bg is not None else torch.zeros_like(color),
             "sdf": sdf,
             "dists": dists,
-            "s_val": 1.0 / inv_s,
+            "s_val": s_val,
             "mid_z_vals": mid_z_vals,
             "weights": weights,
             "weights_sum": weights_sum,
