@@ -527,13 +527,13 @@ class NeuconWRenderer:
         return z_vals
 
     def volsdf_sample(self, rays_o, rays_d, near, far):
-        n_samples = 64//4           # 16
-        n_samples_eval = 128//4     # 32
-        n_samples_extra = 32//4     # 8
+        n_samples = self.n_importance           # 16
+        n_samples_eval = self.n_samples         # 8
+        n_samples_extra = self.boundary_samples # 10
         eps = 0.1
         beta_iters = 10
         max_total_iters = 5
-        add_tiny = 0.0
+        add_tiny = 1.0e-6
 
         device = rays_o.device
 
