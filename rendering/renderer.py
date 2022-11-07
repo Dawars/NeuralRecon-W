@@ -80,6 +80,7 @@ class NeuconWRenderer:
         depth_loss=False,
         floor_labels=None,
         SNet_config=None,
+        logdir="./"
     ):
 
         self.nerf = nerf
@@ -145,6 +146,8 @@ class NeuconWRenderer:
         # and colored visualization of weight distribution in 'samples/steps'.
         self.save_step_sample = save_step_sample
         self.save_step_itr = 0
+
+        self.logdir = logdir
 
         if self.save_sample:
             self.itr = 0
@@ -213,7 +216,7 @@ class NeuconWRenderer:
 
         z_samples = sample_pdf(z_vals, weights, n_importance, det=True).detach()
 
-        if self.save_step_sample:
+        if self.save_step_sample and self.neuconw.training:
             # # start points
             # self.save_samples_step(pts[:, :-1][weights < 0.1].view(-1, 3), f"{step}_{0.0}_{0.1}")
             # # end points
@@ -226,7 +229,7 @@ class NeuconWRenderer:
                 weights.reshape(
                     -1,
                 ),
-                f"{step}_colored",
+                f"{step:03}_colored",
             )
 
             pts_new = rays_o[:, None, :] + rays_d[:, None, :] * z_samples[..., :, None]
@@ -235,7 +238,7 @@ class NeuconWRenderer:
                 torch.zeros_like(z_samples).reshape(
                     -1,
                 ),
-                f"{step}",
+                f"{step:03}",
                 dir_name="new_z",
             )
         return z_samples
@@ -249,7 +252,7 @@ class NeuconWRenderer:
 
         if not last:
             _n_rays, _n_samples, _ = pts.size()
-            new_sdf = self.sdf(pts).reshape(_n_rays, _n_samples)  # todo why inference here?
+            new_sdf = self.sdf(pts).reshape(_n_rays, _n_samples)
             # # print("cat_z_vals ", new_sdf.size(), sdf.size())
             sdf = torch.cat([sdf, new_sdf], dim=-1)
             xx = (
@@ -374,13 +377,13 @@ class NeuconWRenderer:
             [127, 0, 255], dtype=colors.dtype, device=pts_world.device
         )
 
-        print(f"Saving samples at samples/{dir_name}/step_{self.save_step_itr} ...")
+        save_dir = os.path.join(self.logdir, "samples", dir_name, f"step_{self.save_step_itr:03}")
+        os.makedirs(save_dir, exist_ok=True)
+        print(f"Saving samples at {save_dir} ...")
         pcd = o3d.geometry.PointCloud()
         pcd.points = o3d.utility.Vector3dVector(pts_world.detach().cpu().numpy())
         pcd.colors = o3d.utility.Vector3dVector(colors.detach().cpu().numpy() / 255.0)
-        os.makedirs(f"samples/{dir_name}/step_{self.save_step_itr}", exist_ok=True)
-        o3d.io.write_point_cloud(
-            f"samples/{dir_name}/step_{self.save_step_itr}/{save_name}.ply", pcd
+        o3d.io.write_point_cloud(os.path.join(save_dir, f"{dir_name}_{self.save_step_itr:03}_{save_name}.ply"), pcd
         )
 
     def render_depth(self, alphas, z_vals):
@@ -418,7 +421,7 @@ class NeuconWRenderer:
             octree_scale,
             octree_level,
             spc_data=spc_data,
-            visualize=self.save_step_sample,
+            visualize=self.save_step_sample and self.neuconw.training,
             ind=self.save_step_itr,
         )
 
@@ -456,7 +459,7 @@ class NeuconWRenderer:
             octree_scale,
             octree_level,
             spc_data=train_spc_data,
-            visualize=self.save_step_sample,
+            visualize=self.save_step_sample and self.neuconw.training,
             ind=self.save_step_itr,
         )
 
@@ -600,6 +603,15 @@ class NeuconWRenderer:
             alpha = 1 - torch.exp(-free_energy)
             transmittance = torch.exp(-torch.cumsum(shifted_free_energy, dim=-1))
             weights = alpha * transmittance  # probability of the ray hits something here
+            if self.save_step_sample and self.neuconw.training and total_iters == 0:
+                # colored
+                self.save_samples_step(
+                    points.reshape(-1, 3),
+                    weights.reshape(
+                        -1,
+                    ),
+                    f"{total_iters:03}_colored",
+                )
 
             #  Check if we are done and this is the last sampling
             total_iters += 1
@@ -654,13 +666,24 @@ class NeuconWRenderer:
             t = (u - cdf_g[..., 0]) / denom
             samples = bins_g[..., 0] + t * (bins_g[..., 1] - bins_g[..., 0])
 
+            if self.save_step_sample and self.neuconw.training:
+                pts_new = rays_o[:, None, :] + rays_d[:, None, :] * samples[..., :, None]
+                self.save_samples_step(
+                    pts_new.reshape(-1, 3),
+                    torch.zeros_like(samples).reshape(
+                        -1,
+                    ),
+                    f"{total_iters:03}",
+                    dir_name="new_z",
+                )
+
             # Adding samples if we not converged
             if not_converge and total_iters < max_total_iters:
                 z_vals, samples_idx = torch.sort(torch.cat([z_vals, samples], -1), -1)
 
         z_samples = samples
 
-        if n_samples_extra > 0:
+        if n_samples_extra > 0:  # add extra samples from the iterations during the algorithm
             if self.perturb > 0:
                 sampling_idx = torch.randperm(z_vals.shape[1])[:n_samples_extra]
             else:
@@ -800,12 +823,7 @@ class NeuconWRenderer:
         elif self.SNet_config['distribution'] == 'laplace':
             mid_z_vals = z_vals
 
-        if torch.isnan(dists).any():
-            idx = torch.isnan(dists).nonzero()
-            idx = torch.unique(idx[:, 0])
-            print(f"\nNan dists at {idx.item()}: {dists[idx].detach().cpu().numpy()}")
-
-        # Section midpoints # todo we don't wand midpoints for volsdf
+        # Section midpoints
         pts = (
             rays_o[:, None, :] + rays_d[:, None, :] * mid_z_vals[..., :, None]
         )  # n_rays, n_samples, 3
@@ -874,7 +892,7 @@ class NeuconWRenderer:
 
         # Render with background
         if background_alpha is not None:
-            if self.save_sample:
+            if self.save_sample and self.neuconw.training:
                 self.itr += 1
                 # save sampled points as point cloud
                 filter = (pts_norm < 1.0).view(-1, 1)
@@ -885,7 +903,7 @@ class NeuconWRenderer:
                 outside_pts = (pts[~filter_all] * self.radius).view(-1, 3) + self.origin
                 # print(f'total num{pts.size()}, insides num {inside_pts.size()}, outside num {outside_pts.size()}')
                 # print(torch.max(pts_norm), torch.min(pts_norm), torch.sum(filter), torch.sum(1 - filter.long()))
-                if self.insiders is None:
+                if self.insiders is None:  # accumulate points for rendering (mid-section)
                     self.insiders = inside_pts
                     self.outsiders = outside_pts
                 else:
@@ -894,12 +912,13 @@ class NeuconWRenderer:
 
                 if self.itr % 200 == 0:
                     print("Saving samples...")
+                    save_dir = os.path.join(self.logdir, "samples")
                     inside_pcd = o3d.geometry.PointCloud()
                     inside_pcd.points = o3d.utility.Vector3dVector(
                         self.insiders.detach().cpu().numpy()
                     )
                     o3d.io.write_point_cloud(
-                        f"samples/inside_pts_sphere_{self.itr}.ply", inside_pcd
+                        os.path.join(save_dir, f"inside_pts_sphere_{self.itr:03}.ply"), inside_pcd
                     )
 
                     outside_pcd = o3d.geometry.PointCloud()
@@ -907,7 +926,7 @@ class NeuconWRenderer:
                         self.outsiders.detach().cpu().numpy()
                     )
                     o3d.io.write_point_cloud(
-                        f"samples/outside_sphere.ply_{self.itr}.ply", outside_pcd
+                        os.path.join(save_dir, f"outside_sphere.ply_{self.itr:03}.ply"), outside_pcd
                     )
 
                     # clear cache

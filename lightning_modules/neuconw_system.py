@@ -130,6 +130,8 @@ class NeuconWSystem(LightningModule):
             boundary_samples=self.config.NEUCONW.BOUNDARY_SAMPLES,
             nerf_far_override=self.config.NEUCONW.NEAR_FAR_OVERRIDE,
             SNet_config=self.config.NEUCONW.S_CONFIG,
+            logdir=os.path.join(hparams.save_path, hparams.exp_name),
+
         )
 
         self.models = {"neuconw": self.neuconw, "nerf": self.nerf,

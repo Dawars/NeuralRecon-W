@@ -52,7 +52,7 @@ def main(hparams, config):
     # profiler = AdvancedProfiler(dirpath=".", filename="perf_logs")
 
     trainer = Trainer(max_epochs=hparams.num_epochs,
-                      callbacks=[checkpoint_callback, DeviceStatsMonitor(cpu_stats=True)],
+                      callbacks=[checkpoint_callback, ],  # DeviceStatsMonitor(cpu_stats=True)],
                       resume_from_checkpoint=hparams.ckpt_path,
                       logger=logger,
                       devices=hparams.num_gpus,
