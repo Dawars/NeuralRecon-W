@@ -291,7 +291,6 @@ class PhototourismDataset(Dataset):
                     octree_level,
                     visualize=vis_intersection,
                     ind=f"cache_{image_name}_{i}",
-                    with_exit=True, # for accurate results, slower
                 )
                 voxel_near_sfm_all.append(voxel_near_sfm.cpu())
                 voxel_far_sfm_all.append(voxel_far_sfm.cpu())
@@ -673,13 +672,11 @@ class PhototourismDataset(Dataset):
 
                         # assert torch.sum(~expand_valid_mask[valid_mask]) < 10, f"intersection invalid! expanded octree should cover smaller octree, num invalid: {torch.sum(~expand_valid_mask[valid_mask])}"
 
-                        mask = valid_mask & expand_valid_mask
+                        rays[valid_mask, 6] = voxel_nears[valid_mask]
+                        rays[valid_mask, 7] = voxel_fars[valid_mask]
 
-                        rays[mask, 6] = voxel_nears[mask]
-                        rays[mask, 7] = voxel_fars[mask]
-
-                        img = img[mask]
-                        rays = rays[mask]
+                        img = img[valid_mask]
+                        rays = rays[valid_mask]
 
                     if self.depth_percent > 0:
                         valid_depth = rays[:, -2] > 0
