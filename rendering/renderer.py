@@ -1060,7 +1060,9 @@ class NeuconWRenderer:
             "gradient_error": gradient_error,
             "gradients": gradients,
             "normals": normals,
-            "shadow": shadow_ if shadow_ is not None else None
+            "shadow": shadow_ if shadow_ is not None else None,
+            "albedo": albedo if albedo is not None else None,
+            "irradiance": irradiance if irradiance is not None else None,
         }
 
     def render(

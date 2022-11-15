@@ -485,6 +485,16 @@ class NeuconWSystem(LightningModule):
                     "val/GT_pred_depth_normal", stack, self.global_step
                 )
 
+                if self.config.NEUCONW.RELIGHTING:
+                    albedo = results["albedo"].view(H, W, 3).permute(2, 0, 1).cpu()
+                    shadow = results["shadow"].view(H, W, 1).tile(1,1,3).permute(2, 0, 1).cpu()
+                    irradiance = results["irradiance"].view(H, W, 3).permute(2, 0, 1).cpu()
+
+                    stack = torch.stack([img, albedo, shadow, irradiance])  # (3, 3, H, W)
+                    self.logger.experiment.add_images(
+                        "val/img_albedo_shadow_light", stack, self.global_step
+                    )
+
             # save mesh
             mesh_dir = os.path.join(self.logger.save_dir, self.logger.name, "meshes")
             mesh = extract_mesh(
