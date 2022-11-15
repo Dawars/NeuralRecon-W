@@ -1,4 +1,4 @@
-import torch
+from  torch import nn
 from collections import defaultdict
 from pytorch_lightning import LightningModule
 import numpy as np
@@ -77,12 +77,30 @@ class NeuconWSystem(LightningModule):
         self.embeddings["a"] = self.embedding_a
         self.models_to_train += [self.embedding_a]
 
+        if self.config.NEUCONW.RELIGHTING:
+            # Spherical Harmonics
+            self.env_params = nn.ParameterList([nn.Parameter(torch.tensor([
+                    [2.9861e+00, 3.4646e+00, 3.9559e+00],
+                    [1.0013e-01, -6.7589e-02, -3.1161e-01],
+                    [-8.2520e-01, -5.2738e-01, -9.7385e-02],
+                    [2.2311e-03, 4.3553e-03, 4.9501e-03],
+                    [-6.4355e-03, 9.7476e-03, -2.3863e-02],
+                    [1.1078e-01, -6.0607e-02, -1.9541e-01],
+                    [7.9123e-01, 7.6916e-01, 5.6288e-01],
+                    [6.5793e-02, 4.3270e-02, -1.7002e-01],
+                    [-7.2674e-02, 4.5177e-02, 2.2858e-01]
+                ], dtype=torch.float32)) for x in range(self.config.NEUCONW.N_VOCAB)])
+
+            self.embeddings["env"] = self.env_params
+            self.models_to_train += [self.env_params]
+
         # define NEUCONW model
         self.neuconw = NeuconW(
             sdfNet_config=self.config.NEUCONW.SDF_CONFIG,
             colorNet_config=self.config.NEUCONW.COLOR_CONFIG,
             in_channels_a=self.config.NEUCONW.N_A,
             encode_a=self.config.NEUCONW.ENCODE_A,
+            relighting=self.config.NEUCONW.RELIGHTING,
         )
 
         # for background
@@ -124,6 +142,7 @@ class NeuconWSystem(LightningModule):
             mesh_mask_list=self.config.NEUCONW.MESH_MASK_LIST,
             floor_normal=self.config.NEUCONW.FLOOR_NORMAL,
             floor_labels=self.config.NEUCONW.FLOOR_LABELS,
+            relighting=self.config.NEUCONW.RELIGHTING,
             depth_loss=self.config.NEUCONW.DEPTH_LOSS,
             spc_options=spc_options,
             sample_range=self.config.NEUCONW.SAMPLE_RANGE,

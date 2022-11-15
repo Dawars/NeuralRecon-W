@@ -36,6 +36,7 @@ _CN.NEUCONW.ENCODE_A_BG = True
 _CN.NEUCONW.FLOOR_NORMAL = False
 _CN.NEUCONW.FLOOR_LABELS = ['road']
 _CN.NEUCONW.DEPTH_LOSS = False
+_CN.NEUCONW.RELIGHTING = False  # outdoor scene relighting
 
 # network config
 _CN.NEUCONW.SDF_CONFIG = CN()
@@ -62,6 +63,15 @@ _CN.NEUCONW.COLOR_CONFIG.head_channels = 128
 _CN.NEUCONW.COLOR_CONFIG.static_head_layers = 2
 _CN.NEUCONW.COLOR_CONFIG.weight_norm = True
 _CN.NEUCONW.COLOR_CONFIG.multires_view = 4
+
+_CN.NEUCONW.SHADOW_CONFIG = CN()
+_CN.NEUCONW.SHADOW_CONFIG.d_in = 9
+_CN.NEUCONW.SHADOW_CONFIG.d_feature = 512
+# _CN.NEUCONW.SHADOW_CONFIG.mode = "idr"
+_CN.NEUCONW.SHADOW_CONFIG.d_out = 3
+_CN.NEUCONW.SHADOW_CONFIG.d_hidden = 256
+_CN.NEUCONW.SHADOW_CONFIG.weight_norm = True
+_CN.NEUCONW.SHADOW_CONFIG.multires_view = 4
 
 _CN.NEUCONW.S_CONFIG = CN()
 _CN.NEUCONW.S_CONFIG.distribution = "logistic"

@@ -52,6 +52,28 @@ def sample_pdf(bins, weights, n_samples, det=False):
 
     return samples
 
+def illuminate_vec(normal, env):
+    c1 = 0.282095
+    c2 = 0.488603
+    c3 = 1.092548
+    c4 = 0.315392
+    c5 = 0.546274
+
+    c = env.view(-1, 9, 3)#.unsqueeze(1)
+    x, y, z = normal[..., 0, None], normal[..., 1, None], normal[..., 2, None]
+
+    irradiance = (
+            c[:, 0] * c1 +
+            c[:, 1] * c2 * y +
+            c[:, 2] * c2 * z +
+            c[:, 3] * c2 * x +
+            c[:, 4] * c3 * x * y +
+            c[:, 5] * c3 * y * z +
+            c[:, 6] * c4 * (3 * z * z - 1) +
+            c[:, 7] * c3 * x * z +
+            c[:, 8] * c5 * (x * x - y * y)
+    )
+    return irradiance
 
 class NeuconWRenderer:
     def __init__(
@@ -79,6 +101,7 @@ class NeuconWRenderer:
         floor_normal=False,
         depth_loss=False,
         floor_labels=None,
+        relighting=False,
         SNet_config=None,
         logdir="./"
     ):
@@ -124,6 +147,8 @@ class NeuconWRenderer:
         self.floor_labels = floor_labels
 
         self.depth_loss = depth_loss
+
+        self.relighting = relighting
 
         self.save_sample = save_sample
         self.trim_sphere = trim_sphere
@@ -840,11 +865,14 @@ class NeuconWRenderer:
 
         # inputs for NeuconW
         inputs = [pts_, rays_d_]
-        inputs += [a_embedded_]
+        inputs += [a_embedded_]  # sh for shadownet if osr
         # print([it.size() for it in inputs])
 
         static_out = self.neuconw(torch.cat(inputs, -1))
-        rgb, sdf, gradients = static_out
+        if self.relighting:
+            rgb, sdf, gradients, shadow = static_out
+        else:
+            rgb, sdf, gradients = static_out
 
         if self.SNet_config['distribution'] == 'logistic':
             true_cos = (dirs * gradients.reshape(-1, 3)).sum(-1, keepdim=True)
@@ -991,8 +1019,16 @@ class NeuconWRenderer:
 
         # rendered normal
         normals = (gradients * weights[:, :n_samples, None]).sum(dim=1)
-
-        color = (rgb * weights[:, :, None]).sum(dim=1)
+        # todo mean normals
+        if self.relighting:
+            shadow_ = (shadow * weights[:, :n_samples]).sum(dim=1)
+            albedo = (rgb * weights[:, :, None]).sum(dim=1)
+            irradiance = illuminate_vec(normals, a_embedded_[..., 0, :])
+            irradiance = torch.relu(irradiance)  # can't be < 0
+            irradiance = irradiance ** (1 / 2.2)  # linear to srgb
+            color = albedo * irradiance + shadow_[:, None]
+        else:
+            color = (rgb * weights[:, :, None]).sum(dim=1)
 
         if background_rgb is not None:  # Fixed background, usually black
             color = color + background_rgb * (1.0 - weights_sum)
@@ -1024,6 +1060,7 @@ class NeuconWRenderer:
             "gradient_error": gradient_error,
             "gradients": gradients,
             "normals": normals,
+            "shadow": shadow_ if shadow_ is not None else None
         }
 
     def render(
@@ -1061,7 +1098,11 @@ class NeuconWRenderer:
         rays_o = (rays_o / self.radius).float()
         depth_gt = (depth_gt / self.radius).float()
 
-        a_embedded = self.embeddings["a"](ts)
+        if self.relighting:
+            # spherical harmonics params [N, 3*9]
+            a_embedded = torch.stack([self.embeddings["env"][i].view(3*9) for i in ts], 0)
+        else:
+            a_embedded = self.embeddings["a"](ts)
 
         perturb = self.perturb
         if perturb_overwrite >= 0:

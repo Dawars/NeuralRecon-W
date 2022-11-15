@@ -170,6 +170,50 @@ class RenderingNetwork(nn.Module):
         return x, xyz_encoding_final, view_dirs
 
 
+# This implementation is borrowed from IDR: https://github.com/lioryariv/idr
+class ShadowNetwork(nn.Module):
+    def __init__(
+        self,
+        d_feature,
+        d_hidden,
+        d_in=9+3,  # sh gray, view dir todo normal?
+        multires_view=4,
+    ):
+        super().__init__()
+
+        dim = d_in + d_hidden
+        self.embedview_fn = None
+        if multires_view > 0:
+            embedview_fn, input_ch = get_embedder(multires_view)
+            self.embedview_fn = embedview_fn
+            dim += (input_ch - 3)
+
+        base_remap_layers = [nn.Linear(d_feature, d_hidden), ]
+        self.base_remap_layers = nn.Sequential(*base_remap_layers)
+        shadow_layers = []
+        for i in range(1):
+            shadow_layers.append(nn.Linear(dim, d_hidden // 2))
+            shadow_layers.append(nn.ReLU())
+        shadow_layers.append(nn.Linear(d_hidden // 2, 1))
+        shadow_layers.append(nn.Sigmoid())     # shadow values are normalized to [0, 1]
+        self.shadow_layers = nn.Sequential(*shadow_layers)
+
+    def forward(self, view_dirs, feature_vectors, env_gray=None):
+        if self.embedview_fn is not None:
+            view_dirs = self.embedview_fn(view_dirs)
+
+        base_features = self.base_remap_layers(feature_vectors)
+
+        rendering_input = torch.cat(
+            [view_dirs, env_gray, base_features], dim=-1
+        )
+        x = rendering_input
+
+        x = self.shadow_layers(x)
+
+        return x, base_features, view_dirs
+
+
 
 # This implementation is borrowed from IDR: https://github.com/lioryariv/idr
 class SDFNetwork(nn.Module):
@@ -295,6 +339,7 @@ class NeuconW(nn.Module):
         colorNet_config,
         in_channels_a,
         encode_a,
+        relighting,
     ):
 
         super(NeuconW, self).__init__()
@@ -302,6 +347,7 @@ class NeuconW(nn.Module):
         self.colorNet_config = colorNet_config
         self.in_channels_a = in_channels_a
         self.encode_a = encode_a
+        self.relighting = relighting
 
         # xyz encoding layers + sdf layer
         self.sdf_net = SDFNetwork(**self.sdfNet_config)
@@ -314,6 +360,9 @@ class NeuconW(nn.Module):
             in_channels_dir_a=self.in_channels_a,
             encode_apperence=self.encode_a,
         )
+
+        self.shadow_net = ShadowNetwork(d_feature=self.colorNet_config['d_feature'],
+                                        d_hidden=self.colorNet_config['d_hidden'])
 
     def sdf(self, input_xyz):
         # geometry prediction
@@ -348,10 +397,26 @@ class NeuconW(nn.Module):
             input_dir_a,
         )  # (B, 3)
 
-        static_out = (
+        if self.relighting:
+            env_coeffs = input_dir_a.view(-1, 9, 3)
+            env_gray = env_coeffs[..., 0] * 0.2126 + env_coeffs[..., 1] * 0.7152 + env_coeffs[..., 2] * 0.0722
+
+            # shadow prediction
+            shadow, xyz_encoding_final, view_encoded = self.shadow_net(
+                # input_xyz.view(-1, 3),
+                # static_gradient.view(-1, 3),
+                view_dirs.view(-1, 3),
+                xyz_,
+                env_gray,  # env params
+            )  # (B, 1)
+
+        static_out = [
             static_rgb.view(n_rays, n_samples, 3),
             static_sdf.view(n_rays, n_samples),
             static_gradient.view(n_rays, n_samples, 3),
-        )
+        ]
+
+        if self.relighting:
+            static_out.append(shadow.view(n_rays, n_samples))
 
         return static_out
