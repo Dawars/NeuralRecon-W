@@ -174,27 +174,34 @@ class RenderingNetwork(nn.Module):
 class ShadowNetwork(nn.Module):
     def __init__(
         self,
-        d_feature,
-        d_hidden,
-        d_in=9+3,  # sh gray, view dir todo normal?
+        d_in=3+9,  # sh gray, view dir
+        d_out=1,
+        d_feature=512,
+        d_hidden=256,
+        weight_norm=True,
         multires_view=4,
     ):
         super().__init__()
 
-        dim = d_in + d_hidden
+        dim = d_in + d_feature
         self.embedview_fn = None
         if multires_view > 0:
             embedview_fn, input_ch = get_embedder(multires_view)
             self.embedview_fn = embedview_fn
             dim += (input_ch - 3)
 
-        base_remap_layers = [nn.Linear(d_feature, d_hidden), ]
+        base_remap_layers = [nn.Linear(d_feature, d_feature), ]
         self.base_remap_layers = nn.Sequential(*base_remap_layers)
         shadow_layers = []
         for i in range(1):
-            shadow_layers.append(nn.Linear(dim, d_hidden // 2))
+            lin = nn.Linear(dim, d_hidden)
+
+            if weight_norm:
+                lin = nn.utils.weight_norm(lin)
+
+            shadow_layers.append(lin)
             shadow_layers.append(nn.ReLU())
-        shadow_layers.append(nn.Linear(d_hidden // 2, 1))
+        shadow_layers.append(nn.Linear(d_hidden, d_out))
         shadow_layers.append(nn.Sigmoid())     # shadow values are normalized to [0, 1]
         self.shadow_layers = nn.Sequential(*shadow_layers)
 
@@ -337,6 +344,7 @@ class NeuconW(nn.Module):
         self,
         sdfNet_config,
         colorNet_config,
+        shadowNet_config,
         in_channels_a,
         encode_a,
         relighting,
@@ -345,6 +353,7 @@ class NeuconW(nn.Module):
         super(NeuconW, self).__init__()
         self.sdfNet_config = sdfNet_config
         self.colorNet_config = colorNet_config
+        self.shadowNet_config = shadowNet_config
         self.in_channels_a = in_channels_a
         self.encode_a = encode_a
         self.relighting = relighting
@@ -361,8 +370,7 @@ class NeuconW(nn.Module):
             encode_apperence=self.encode_a,
         )
 
-        self.shadow_net = ShadowNetwork(d_feature=self.colorNet_config['d_feature'],
-                                        d_hidden=self.colorNet_config['d_hidden'])
+        self.shadow_net = ShadowNetwork(**self.shadowNet_config)
 
     def sdf(self, input_xyz):
         # geometry prediction

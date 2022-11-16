@@ -84,6 +84,7 @@ _CN.NEUCONW.LOSS.igr_weight = 0.1
 _CN.NEUCONW.LOSS.mask_weight = 0.1
 _CN.NEUCONW.LOSS.depth_weight = 0.1
 _CN.NEUCONW.LOSS.floor_weight = 0.01
+_CN.NEUCONW.LOSS.shadow_weight = 0.1
 
 
 ##############  Dataset  ##############

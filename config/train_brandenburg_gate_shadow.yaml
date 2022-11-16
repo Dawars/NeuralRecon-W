@@ -57,9 +57,10 @@ NEUCONW:
     multires_view: 4
 
   SHADOW_CONFIG:
-    d_in: 9 #+view
+    d_in: 12 # 9 sh + 3 view
 #    mode: "idr"
     d_out: 1
+    d_feature: 512
     d_hidden: 256
     weight_norm: True
     multires_view: 4
@@ -75,6 +76,7 @@ NEUCONW:
     mask_weight: 0.1
     depth_weight: 0.1
     floor_weight: 0.01
+    shadow_weight: 0.1
 
 DATASET:
   ROOT_DIR: '/mnt/hdd/3d_recon/neural_recon_w/heritage-recon/brandenburg_gate'

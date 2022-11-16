@@ -8,13 +8,14 @@ class NeuconWLoss(nn.Module):
         f_l: fine color loss (1st term in equation 13)
         s_l: sigma loss (3rd term in equation 13)
     """
-    def __init__(self, coef=1, igr_weight=0.1, mask_weight=0.1, depth_weight=0.1, floor_weight=0.01, config=None):
+    def __init__(self, coef=1, igr_weight=0.1, mask_weight=0.1, depth_weight=0.1, floor_weight=0.01, shadow_weight=0.1, config=None):
         super().__init__()
         self.coef = coef
         self.igr_weight = igr_weight
         self.mask_weight = mask_weight
         self.depth_weight = depth_weight
-        self.floor_weight = depth_weight
+        self.floor_weight = floor_weight
+        self.shadow_weight = shadow_weight
         
         self.config = config
 
@@ -36,6 +37,9 @@ class NeuconWLoss(nn.Module):
 
         if self.config.NEUCONW.FLOOR_NORMAL:
             ret['floor_normal_error'] = self.floor_weight * inputs['floor_normal_error'].mean()
+
+        if self.config.NEUCONW.RELIGHTING:
+            ret['shadow_loss'] = self.shadow_weight * inputs['shadow_loss'].mean()
 
         for k, v in ret.items():
             ret[k] = self.coef * v

@@ -870,7 +870,7 @@ class NeuconWRenderer:
 
         static_out = self.neuconw(torch.cat(inputs, -1))
         if self.relighting:
-            rgb, sdf, gradients, shadow = static_out
+            rgb, sdf, gradients, shadow_samples = static_out
         else:
             rgb, sdf, gradients = static_out
 
@@ -1021,12 +1021,12 @@ class NeuconWRenderer:
         normals = (gradients * weights[:, :n_samples, None]).sum(dim=1)
         # todo mean normals
         if self.relighting:
-            shadow_ = (shadow * weights[:, :n_samples]).sum(dim=1)
+            shadow = (shadow_samples * weights[:, :n_samples]).sum(dim=1)
             albedo = (rgb * weights[:, :, None]).sum(dim=1)
             irradiance = illuminate_vec(normals, a_embedded_[..., 0, :])
             irradiance = torch.relu(irradiance)  # can't be < 0
             irradiance = irradiance ** (1 / 2.2)  # linear to srgb
-            color = albedo * irradiance + shadow_[:, None]
+            color = albedo * irradiance + shadow[:, None]
         else:
             color = (rgb * weights[:, :, None]).sum(dim=1)
 
@@ -1044,7 +1044,7 @@ class NeuconWRenderer:
             relax_inside_sphere.sum() + 1e-5
         )
 
-        return {
+        output = {
             "color": color,
             "color_sphere": color_sphere,
             "color_bg": color_bg if color_bg is not None else torch.zeros_like(color),
@@ -1060,10 +1060,12 @@ class NeuconWRenderer:
             "gradient_error": gradient_error,
             "gradients": gradients,
             "normals": normals,
-            "shadow": shadow_ if shadow_ is not None else None,
-            "albedo": albedo if albedo is not None else None,
-            "irradiance": irradiance if irradiance is not None else None,
         }
+        if self.relighting:
+            output["shadow"] = shadow
+            output["albedo"] = albedo
+            output["irradiance"] = irradiance
+        return output
 
     def render(
         self,
@@ -1183,6 +1185,12 @@ class NeuconWRenderer:
         else:
             sfm_depth_loss = torch.zeros_like(rendered_depth)
 
+        # shadow error
+        if self.relighting:
+            shadow_loss = ((ret_fine['shadow'] - 1.0) ** 2) / (N_rays + 1e-5)
+        else:
+            shadow_loss = torch.zeros_like(ret_fine['shadow'])
+
         return {
             "color": color,
             "color_sphere": ret_fine["color_sphere"],
@@ -1200,6 +1208,7 @@ class NeuconWRenderer:
             "floor_normal_error": floor_normal_error,
             "floor_y_error": floor_y_error,
             "sfm_depth_loss": sfm_depth_loss,
+            "shadow_loss": shadow_loss,
             "albedo": ret_fine["albedo"],
             "shadow": ret_fine["shadow"],
             "irradiance": ret_fine["irradiance"],

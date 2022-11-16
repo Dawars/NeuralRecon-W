@@ -98,6 +98,7 @@ class NeuconWSystem(LightningModule):
         self.neuconw = NeuconW(
             sdfNet_config=self.config.NEUCONW.SDF_CONFIG,
             colorNet_config=self.config.NEUCONW.COLOR_CONFIG,
+            shadowNet_config=self.config.NEUCONW.SHADOW_CONFIG,
             in_channels_a=self.config.NEUCONW.N_A,
             encode_a=self.config.NEUCONW.ENCODE_A,
             relighting=self.config.NEUCONW.RELIGHTING,
@@ -376,7 +377,7 @@ class NeuconWSystem(LightningModule):
         rgbs = rgbs[ray_mask]
         label = label[ray_mask]
 
-        results = self(rays, ts, label)
+        results = self.forward(rays, ts, label)
         loss_d = self.loss(results, rgbs)
         loss = sum(l for l in loss_d.values())
 
