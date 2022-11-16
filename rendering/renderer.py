@@ -1200,6 +1200,9 @@ class NeuconWRenderer:
             "floor_normal_error": floor_normal_error,
             "floor_y_error": floor_y_error,
             "sfm_depth_loss": sfm_depth_loss,
+            "albedo": ret_fine["albedo"],
+            "shadow": ret_fine["shadow"],
+            "irradiance": ret_fine["irradiance"],
         }
 
     def floor_loss(self, label, normals, rays_o, rays_d, rendered_depth):
