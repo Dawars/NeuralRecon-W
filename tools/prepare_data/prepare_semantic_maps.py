@@ -18,7 +18,7 @@ def get_opts():
                         help='root directory of dataset')
     parser.add_argument('--gpu', type=int, default=0,
                         help='which gpu to run')
-    parser.add_argument('--img_downscale', type=int, default=-1,
+    parser.add_argument('--img_downscale', type=int, default=2048,
                         help='rescale images to this size preserving aspect ratio e.g. 1024')
 
     return parser.parse_args()
@@ -35,13 +35,13 @@ if __name__ == '__main__':
 
     print(f'Preparing semantic maps for {args.root_dir.split("/")[-1]} set...')
 
-    image_paths = os.listdir(os.path.join(args.root_dir, 'dense/images'))
+    image_paths = glob.glob(os.path.join(args.root_dir, 'dense/images/*'))
 
     # build the DeepLabv3 model from a config file and a checkpoint file
     model = init_segmentor(config_file, checkpoint_file, device=f'cuda:{args.gpu}')
 
     for img_path in tqdm(image_paths):
-        img = Image.open(img_path)
+        img = Image.open(img_path).convert('RGB')
         image_name = img_path.split('/')[-1][:-len(img_path.split('.')[-1])-1]
         img_w, img_h = img.size
         # resize
