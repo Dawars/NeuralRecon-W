@@ -495,6 +495,14 @@ class NeuconWSystem(LightningModule):
                     self.logger.experiment.add_images(
                         "val/img_albedo_shadow_light", stack, self.global_step
                     )
+                    env_lighting_fig, env_min, env_max = viz_env_lighting(self.env_params[ts[0]])
+                    self.logger.experiment.add_figure(
+                        "val/env_lighting", env_lighting_fig, self.global_step
+                    )
+                    self.logger.experiment.add_scalars("val", {
+                        "env_min": env_min,
+                        "env_max": env_max,
+                    }, self.global_step)
 
             # save mesh
             mesh_dir = os.path.join(self.logger.save_dir, self.logger.name, "meshes")

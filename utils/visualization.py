@@ -1,14 +1,16 @@
-import torchvision.transforms as T
 import numpy as np
 import cv2
 from PIL import Image
-import torch
 import trimesh
+import matplotlib.pyplot as plt
 from skimage import measure
 from tqdm import tqdm
-from utils.comm import get_world_size, get_rank
+import torch
+import torchvision.transforms as T
 import torch.distributed as dist
-import torch.distributed
+
+from utils.comm import get_world_size, get_rank
+
 
 def visualize_depth(depth, cmap=cv2.COLORMAP_JET):
     """
@@ -33,6 +35,7 @@ def get_local_split(data, world_size, local_rank):
     local_split_length = xyz_padded.shape[0] // world_size
     local_data = xyz_padded[local_rank*local_split_length: (local_rank+1)*local_split_length]
     return local_data
+
 
 def extract_mesh(dim, chunk, scene_radius, scene_origin, origin=None, radius=1.0,
                        with_color=False, embedding_a=None, chunk_rgb=256, sparse_data=None, renderer=None):
@@ -157,3 +160,38 @@ def extract_mesh(dim, chunk, scene_radius, scene_origin, origin=None, radius=1.0
 
     if local_rank == 0:
         return mesh
+
+
+def viz_env_lighting(sh_coeffs):
+    """
+    sh_coeffs: 3*9
+    """
+    phi = np.linspace(0, np.pi, 100)
+    theta = np.linspace(0, 2 * np.pi, 100)
+    phi, theta = np.meshgrid(phi, theta)
+
+    # The Cartesian coordinates of the unit sphere
+    x = np.sin(phi) * np.cos(theta)
+    y = np.sin(phi) * np.sin(theta)
+    z = np.cos(phi)
+
+    normals = np.stack([x, y, z], axis=0).transpose([1, 2, 0])
+
+    from rendering.renderer import illuminate_vec
+    # Calculate the spherical harmonic and normalize to [0,1]
+    fcolors = illuminate_vec(torch.tensor(normals, device=sh_coeffs.device), sh_coeffs).cpu().detach().numpy()
+    fmax, fmin = fcolors.max(), fcolors.min()
+    fcolors = (fcolors - fmin) / (fmax - fmin)
+
+    # Set the aspect ratio to 1 so our sphere looks spherical
+    fig = plt.figure(figsize=plt.figaspect(1.))
+    ax = fig.add_subplot(111, projection='3d')
+    ax.plot_surface(x, y, z, rstride=1, cstride=1, facecolors=fcolors)
+    # Turn off the axis planes
+    ax.set_axis_off()
+    ax.set_title(f"Max: {fmax:.2f} min: {fmin:.2f}")
+    # scaling = np.array([getattr(ax, 'get_{}lim'.format(dim))() for dim in 'xyz'])
+    # ax.auto_scale_xyz(*[[np.min(scaling), np.max(scaling)]]*3)
+    fig.tight_layout()
+
+    return fig, fmin, fmax
