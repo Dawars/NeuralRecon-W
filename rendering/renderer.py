@@ -189,7 +189,7 @@ class NeuconWRenderer:
                 rays_o[:, None, :] + rays_d[:, None, :] * z_vals[..., :, None]
         )  # n_rays, n_samples, 3
         radius = torch.linalg.norm(pts, ord=2, dim=-1, keepdim=False)
-        inside_sphere = (radius[:, :-1] < 1.0) | (radius[:, 1:] < 1.0)
+        inside_sphere = (radius[:, :-1] < 1.0) | (radius[:, 1:] < 1.0)  # whether one side of interval is inside
         sdf = sdf.reshape(batch_size, n_samples)
         prev_sdf, next_sdf = sdf[:, :-1], sdf[:, 1:]
         prev_z_vals, next_z_vals = z_vals[:, :-1], z_vals[:, 1:]
@@ -330,7 +330,7 @@ class NeuconWRenderer:
 
         # Section length
         dists = z_vals[..., 1:] - z_vals[..., :-1]
-        dists = torch.cat([dists, sample_dist.expand(dists[..., :1].shape)], -1)
+        dists = torch.cat([dists, sample_dist.expand(dists[..., :1].shape)], -1)  # make midpoints same length as z_vals
         mid_z_vals = z_vals + dists * 0.5
 
         # Section midpoints
