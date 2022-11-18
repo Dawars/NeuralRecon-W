@@ -1020,7 +1020,7 @@ class NeuconWRenderer:
         # rendered normal
         normals = (gradients * weights[:, :n_samples, None]).sum(dim=1)
         if self.relighting:
-            normals = normals / torch.linalg.norm(normals, 2, -1)
+            normals = normals / torch.linalg.norm(normals, 2, dim=-1, keepdim=True)
             shadow = (shadow_samples * weights[:, :n_samples]).sum(dim=1)
             albedo = (rgb * weights[:, :, None]).sum(dim=1)
             irradiance = illuminate_vec(normals, a_embedded_[..., 0, :])
