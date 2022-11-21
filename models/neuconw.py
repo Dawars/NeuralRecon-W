@@ -408,7 +408,7 @@ class NeuconW(nn.Module):
         if self.relighting:
             env_coeffs = input_dir_a.view(-1, 9, 3)
             env_gray = env_coeffs[..., 0] * 0.2126 + env_coeffs[..., 1] * 0.7152 + env_coeffs[..., 2] * 0.0722
-            env_gray = env_gray + torch.normal(mean=0, std=0.025, size=env_gray.shape, device=device)
+            env_gray = env_gray + torch.randn_like(env_gray) * 0.01
             # shadow prediction
             shadow, xyz_encoding_final, view_encoded = self.shadow_net(
                 # input_xyz.view(-1, 3),
