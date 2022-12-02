@@ -745,6 +745,7 @@ class PhototourismDataset(Dataset):
                 sample["rays"] = torch.cat(
                     (self.all_rays[idx, :8], self.all_rays[idx, 9:12]), dim=-1
                 )
+                sample["semantics"] = torch.zeros_like(sample["ts"])
 
         elif self.split == "eval":
             w, h = self.img_wh[idx]
@@ -819,6 +820,8 @@ class PhototourismDataset(Dataset):
                 )
                 rays_mask = semantic_map.reshape(-1, 1)
                 sample["semantics"] = torch.from_numpy(rays_mask)
+            else:
+                sample["semantics"] = torch.zeros_like(sample["ts"])
             sample["img_wh"] = torch.LongTensor([img_w, img_h])
             sample["K"] = self.Ks[id_]
 
