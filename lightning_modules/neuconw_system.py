@@ -442,7 +442,7 @@ class NeuconWSystem(LightningModule):
 
         results = defaultdict(list)
         for i in range(0, B, self.hparams.test_batch_size):
-            rendered_ray_chunks = self(
+            rendered_ray_chunks = self.forward(
                 rays[i : i + self.hparams.test_batch_size],
                 ts[i : i + self.hparams.test_batch_size],
                 labels[i : i + self.hparams.test_batch_size],
@@ -499,10 +499,8 @@ class NeuconWSystem(LightningModule):
                     self.logger.experiment.add_figure(
                         "val/env_lighting", env_lighting_fig, self.global_step
                     )
-                    self.logger.experiment.add_scalars("val", {
-                        "env_min": env_min,
-                        "env_max": env_max,
-                    }, self.global_step)
+                    self.logger.experiment.add_scalar("val/env_min", env_min, self.global_step)
+                    self.logger.experiment.add_scalar("val/env_max", env_max, self.global_step)
 
             # save mesh
             mesh_dir = os.path.join(self.logger.save_dir, self.logger.name, "meshes")
