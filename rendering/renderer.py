@@ -1029,6 +1029,9 @@ class NeuconWRenderer:
             color = albedo * irradiance + shadow[:, None]
         else:
             color = (rgb * weights[:, :, None]).sum(dim=1)
+            shadow = torch.zeros_like(sdf)
+            albedo = torch.zeros_like(color)
+            irradiance = torch.zeros_like(color)
 
         if background_rgb is not None:  # Fixed background, usually black
             color = color + background_rgb * (1.0 - weights_sum)
@@ -1060,11 +1063,10 @@ class NeuconWRenderer:
             "gradient_error": gradient_error,
             "gradients": gradients,
             "normals": normals,
+            "shadow": shadow,
+            "albedo": albedo,
+            "irradiance": irradiance,
         }
-        if self.relighting:
-            output["shadow"] = shadow
-            output["albedo"] = albedo
-            output["irradiance"] = irradiance
         return output
 
     def render(
@@ -1189,7 +1191,7 @@ class NeuconWRenderer:
         if self.relighting:
             shadow_loss = ((ret_fine['shadow'] - 1.0) ** 2) / (N_rays + 1e-5)
         else:
-            shadow_loss = torch.zeros_like(ret_fine['shadow'])
+            shadow_loss = torch.zeros_like(ret_fine['sdf'])
 
         return {
             "color": color,
