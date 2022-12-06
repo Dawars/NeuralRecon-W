@@ -1026,7 +1026,7 @@ class NeuconWRenderer:
             irradiance = illuminate_vec(normals, a_embedded_[..., 0, :])
             irradiance = torch.relu(irradiance)  # can't be < 0
             irradiance = irradiance ** (1 / 2.2)  # linear to srgb
-            color = albedo * irradiance + shadow[:, None]
+            color = albedo * irradiance * shadow[:, None]
         else:
             color = (rgb * weights[:, :, None]).sum(dim=1)
             shadow = torch.zeros_like(sdf)
