@@ -1,5 +1,8 @@
+import numpy as np
 import torch
 from torch import nn
+
+
 class NeuconWLoss(nn.Module):
     """
     Equation 13 in the NeRF-W paper.
@@ -39,7 +42,7 @@ class NeuconWLoss(nn.Module):
             ret['floor_normal_error'] = self.floor_weight * inputs['floor_normal_error'].mean()
 
         if self.config.NEUCONW.RELIGHTING:
-            lr_weight = torch.clip((global_step - 10000) / 20000)
+            lr_weight = np.clip((global_step - 10000) / 20000, 0, 1)
             ret['shadow_loss'] = lr_weight * self.shadow_weight * inputs['shadow_loss'].mean()
 
         for k, v in ret.items():
