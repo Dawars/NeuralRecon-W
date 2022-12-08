@@ -378,7 +378,7 @@ class NeuconWSystem(LightningModule):
         label = label[ray_mask]
 
         results = self.forward(rays, ts, label)
-        loss_d = self.loss(results, rgbs)
+        loss_d = self.loss(results, rgbs, self.global_step)
         loss = sum(l for l in loss_d.values())
 
         with torch.no_grad():

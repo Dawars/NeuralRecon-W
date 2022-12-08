@@ -19,7 +19,7 @@ class NeuconWLoss(nn.Module):
         
         self.config = config
 
-    def forward(self, inputs, targets, masks=None):
+    def forward(self, inputs, targets, global_step, masks=None):
         ret = {}
         if masks is None:
                 masks = torch.ones((targets.shape[0], 1)).to(targets.device)
@@ -39,7 +39,8 @@ class NeuconWLoss(nn.Module):
             ret['floor_normal_error'] = self.floor_weight * inputs['floor_normal_error'].mean()
 
         if self.config.NEUCONW.RELIGHTING:
-            ret['shadow_loss'] = self.shadow_weight * inputs['shadow_loss'].mean()
+            lr_weight = torch.clip((global_step - 10000) / 20000)
+            ret['shadow_loss'] = lr_weight * self.shadow_weight * inputs['shadow_loss'].mean()
 
         for k, v in ret.items():
             ret[k] = self.coef * v

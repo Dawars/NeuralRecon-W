@@ -1189,7 +1189,7 @@ class NeuconWRenderer:
 
         # shadow error
         if self.relighting:
-            shadow_loss = ((ret_fine['shadow'] - 1.0) ** 2) / (N_rays + 1e-5)
+            shadow_loss = ((ret_fine['shadow'] - 1.0) ** 2)
         else:
             shadow_loss = torch.zeros_like(ret_fine['sdf'])
 
