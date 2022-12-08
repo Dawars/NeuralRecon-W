@@ -451,7 +451,7 @@ class NeuconWSystem(LightningModule):
                 results[k] += [v.detach()]
         for k, v in results.items():
             results[k] = torch.cat(v, dim=0)
-        loss_d = self.loss(results, rgbs)
+        loss_d = self.loss(results, rgbs, self.global_step)
         loss = sum(l for l in loss_d.values())
         log = {"val_loss": loss}
 
