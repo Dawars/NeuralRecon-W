@@ -37,6 +37,7 @@ def main(hparams, config):
                         filename='{epoch:d}',
                         monitor='val/psnr',
                         mode='max',
+                        every_n_train_steps=config.TRAINER.SAVE_FREQ,
                         save_top_k=-1)
 
     logger = TensorBoardLogger(save_dir=hparams.save_path,
