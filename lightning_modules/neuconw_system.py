@@ -384,12 +384,12 @@ class NeuconWSystem(LightningModule):
         with torch.no_grad():
             psnr_ = psnr(results[f"color"], rgbs)
 
-        self.log("lr", get_learning_rate(self.optimizer))
-        self.log("train/loss", loss)
+        self.log("lr", get_learning_rate(self.optimizer), sync_dist=True)
+        self.log("train/loss", loss, sync_dist=True)
         for k, v in loss_d.items():
-            self.log(f"train/{k}", v, prog_bar=True)
-        self.log("train/psnr", psnr_, prog_bar=True)
-        self.log("train/s_val", results["s_val"].mean())
+            self.log(f"train/{k}", v, prog_bar=True, sync_dist=True)
+        self.log("train/psnr", psnr_, prog_bar=True, sync_dist=True)
+        self.log("train/s_val", results["s_val"].mean(), sync_dist=True)
         with torch.no_grad():
             if self.update_freq > 0 and (self.global_step + 1) % self.update_freq == 0:
                 self.octree_update(
@@ -582,5 +582,5 @@ class NeuconWSystem(LightningModule):
         mean_loss = torch.stack([x["val_loss"] for x in outputs]).mean()
         mean_psnr = torch.stack([x["val_psnr"] for x in outputs]).mean()
 
-        self.log("val/loss", mean_loss)
-        self.log("val/psnr", mean_psnr, prog_bar=True)
+        self.log("val/loss", mean_loss, sync_dist=True)
+        self.log("val/psnr", mean_psnr, prog_bar=True, sync_dist=True)
