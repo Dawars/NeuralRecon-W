@@ -1018,9 +1018,9 @@ class NeuconWRenderer:
         color_sphere = (sphere_rgb * weights_sphere[:, :, None]).sum(dim=1)
 
         # rendered normal
-        normals = (gradients * weights[:, :n_samples, None]).sum(dim=1)
+        normals = (gradients * weights[:, :n_samples, None]).mean(dim=1)
         if self.relighting:
-            normals = normals / torch.linalg.norm(normals, 2, dim=-1, keepdim=True)
+            normals = F.normalize(normals, p=2, dim=-1)
             shadow = (shadow_samples * weights[:, :n_samples]).sum(dim=1)
             albedo = (rgb * weights[:, :, None]).sum(dim=1)
             irradiance = illuminate_vec(normals, a_embedded_[..., 0, :])
