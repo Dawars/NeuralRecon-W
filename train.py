@@ -15,7 +15,12 @@ from pytorch_lightning.loggers import TensorBoardLogger
 
 from config.defaults import get_cfg_defaults
 
-def main(hparams, config):
+
+def main(hparams):
+
+    config = get_cfg_defaults()
+    config.merge_from_file(hparams.cfg_path)
+
     caches = None
     pl.seed_everything(config.TRAINER.SEED)
 
@@ -25,7 +30,10 @@ def main(hparams, config):
     _scaling = config.TRAINER.TRUE_BATCH_SIZE / config.TRAINER.CANONICAL_BS
     config.TRAINER.SCALING = _scaling
     config.TRAINER.LR = config.TRAINER.CANONICAL_LR * _scaling
-    
+
+    if hasattr(hparams, 'shadow_weight'):
+        config.NEUCONW.LOSS.shadow_weight = hparams.shadow_weight
+
     system = NeuconWSystem(hparams, config, caches) 
 
     data_module = DataModule(hparams, config)
@@ -73,7 +81,4 @@ def main(hparams, config):
 
 if __name__ == '__main__':
     hparams = get_opts()
-    config = get_cfg_defaults()
-    config.merge_from_file(hparams.cfg_path)
-    # caches = setup_shared_ray_cache(hparams)
-    main(hparams, config)
+    main(hparams)
