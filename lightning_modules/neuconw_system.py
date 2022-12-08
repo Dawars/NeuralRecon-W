@@ -490,6 +490,7 @@ class NeuconWSystem(LightningModule):
                     albedo = results["albedo"].view(H, W, 3).permute(2, 0, 1).cpu()
                     shadow = results["shadow"].view(H, W, 1).tile(1,1,3).permute(2, 0, 1).cpu()
                     irradiance = results["irradiance"].view(H, W, 3).permute(2, 0, 1).cpu()
+                    irradiance = irradiance / max(1.0, irradiance.max().item())
 
                     stack = torch.stack([img, albedo, shadow, irradiance])  # (3, 3, H, W)
                     self.logger.experiment.add_images(
