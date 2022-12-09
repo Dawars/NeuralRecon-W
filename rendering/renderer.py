@@ -1104,11 +1104,11 @@ class NeuconWRenderer:
         rays_o = (rays_o / self.radius).float()
         depth_gt = (depth_gt / self.radius).float()
 
+        env_coeffs = None
         if self.relighting:
             # spherical harmonics params [N, 3*9]
-            a_embedded = torch.stack([self.embeddings["env"][i].view(3*9) for i in ts], 0)
-        else:
-            a_embedded = self.embeddings["a"](ts)
+            env_coeffs = torch.stack([self.embeddings["env"][i].view(3*9) for i in ts], 0)
+        a_embedded = self.embeddings["a"](ts)
 
         perturb = self.perturb
         if perturb_overwrite >= 0:
@@ -1143,7 +1143,7 @@ class NeuconWRenderer:
             rays_d,
             z_vals,
             sample_dist,
-            a_embedded,
+            a_embedded if not self.relighting else env_coeffs,
             background_rgb=background_rgb,
             background_alpha=background_alpha,
             background_sampled_color=background_sampled_color,

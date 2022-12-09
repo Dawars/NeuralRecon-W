@@ -18,14 +18,14 @@ NEUCONW:
   
   N_VOCAB: 5000
   ENCODE_A: False
-  N_A: 27
+  N_A: 48
   N_STATIC_HEAD: 1
   ANNEAL_END: 50000
 
   RENDER_BG: True
   MESH_MASK_LIST: ['sky']
   RAY_MASK_LIST:  ['person', 'car', 'bicycle', 'minibike']
-  ENCODE_A_BG: False
+  ENCODE_A_BG: True
   FLOOR_NORMAL: False
   FLOOR_LABELS: [ 'road' ]
   RELIGHTING: True
@@ -76,7 +76,7 @@ NEUCONW:
     mask_weight: 0.1
     depth_weight: 0.1
     floor_weight: 0.01
-    shadow_weight: 0.1
+    shadow_weight: 10.0
 
 DATASET:
   ROOT_DIR: '/mnt/hdd/3d_recon/neural_recon_w/heritage-recon/brandenburg_gate'

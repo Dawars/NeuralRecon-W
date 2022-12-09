@@ -382,8 +382,9 @@ class NeuconW(nn.Module):
 
     def forward(self, x):
         device = x.device
+        embedding_size = self.in_channels_a if not self.relighting else 3*9  # osr sh coeffs
         input_xyz, view_dirs, input_dir_a = torch.split(
-            x, [3, 3, self.in_channels_a], dim=-1
+            x, [3, 3, embedding_size], dim=-1
         )
 
         n_rays, n_samples, _ = input_xyz.size()
