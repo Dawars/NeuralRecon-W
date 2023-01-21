@@ -712,6 +712,8 @@ class PhototourismDataset(Dataset):
             "test_train",
         ]:  # use the first image as val image (also in train)
             self.val_id = self.img_ids_train[0]
+            if self.use_voxel:
+                self.sfm_octree = self.get_octree(device=0, expand=1, radius=1)
 
         else:  # for testing, create a parametric rendering path
             # test poses and appearance index are defined in test.py
@@ -794,7 +796,14 @@ class PhototourismDataset(Dataset):
             rays_o, rays_d = get_rays(directions, c2w)
 
             image_name = self.image_paths[id_].split(".")[0]
-
+            _, _, valid_mask = self.near_far_voxel(
+                self.sfm_octree, rays_o, rays_d, image_name
+            )
+            if self.use_voxel:
+                sample["mask"] = valid_mask
+            else:
+                sample["mask"] = np.ones([img_w, img_h], dtype=bool)
+            sample["image_name"] = self.image_paths[id_]
             rays = torch.cat(
                 [
                     rays_o,
