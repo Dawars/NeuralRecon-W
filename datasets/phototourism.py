@@ -49,6 +49,7 @@ class PhototourismDataset(Dataset):
         shared_rgbs_base=None,
         all_rays_shape=None,
         all_rgbs_shape=None,
+        split_file="*.tsv",
     ):
         """
         img_downscale: longest side to resize preserving aspect ratio or 1 if downscaling
@@ -122,6 +123,8 @@ class PhototourismDataset(Dataset):
             ).reshape(all_rays_shape)
             self.all_rays = torch.from_numpy(shared_array_ray)
             print("Cached rays loaded to torch!")
+
+        self.split_file = split_file
         self.read_meta()
 
     def vis_sphere(self, center_id=47129, radius=4.6):
@@ -318,7 +321,7 @@ class PhototourismDataset(Dataset):
     def read_meta(self):
         # self.vis_sphere()
         # read all files in the tsv first (split to train and test later)
-        tsv = glob.glob(os.path.join(self.root_dir, "*.tsv"))[0]
+        tsv = glob.glob(os.path.join(self.root_dir, self.split_file))[0]
         self.scene_name = os.path.basename(tsv)[:-4]
         self.files = pd.read_csv(tsv, sep="\t")
         # we accept all images

@@ -159,8 +159,7 @@ def split_to_chunks(
         json.dump(meta_info, outfile)
 
 
-if __name__ == "__main__":
-    args = get_opts()
+def main(args, i):
     os.makedirs(os.path.join(args.root_dir, args.cache_dir), exist_ok=True)
     print(f"Preparing cache for scale {args.img_downscale}...")
 
@@ -172,6 +171,7 @@ if __name__ == "__main__":
             "img_downscale": args.img_downscale,
             "with_semantics": with_semantic,
             "semantic_map_path": args.semantic_map_path,
+            "split_file": f"brandenburg_gate_{i}.tsv"
         }
     dataset = dataset_dict[args.dataset_name](**kwargs)
 
@@ -237,3 +237,12 @@ if __name__ == "__main__":
         t = (time.time() - start_time) / 60
         print(f"Using {t} min to save!")
         print(f"Data cache saved to {os.path.join(args.root_dir, args.cache_dir)} !")
+
+
+if __name__ == "__main__":
+    args = get_opts()
+
+    for i in range(0, 7):
+        args.cache_dir = f"cache_{i}"
+        args.split_to_chunks = max(4, 2**i)
+        main(args, i)
