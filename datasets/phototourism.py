@@ -1,4 +1,5 @@
 import math
+from pathlib import Path
 
 import open3d as o3d
 import torch
@@ -606,7 +607,7 @@ class PhototourismDataset(Dataset):
                     depths = depth_sfm.reshape(-1, 1)
                     weights = weight.reshape(-1, 1)
 
-                    image_name = self.image_paths[id_].split(".")[0]
+                    image_name = Path(self.image_paths[id_]).with_suffix("").name
 
                     if vis_depth:
                         print(f"saving... at samples/depth/{image_name}.ply")
@@ -798,9 +799,9 @@ class PhototourismDataset(Dataset):
             directions = get_ray_directions(img_h, img_w, self.Ks[id_])
             rays_o, rays_d = get_rays(directions, c2w)
 
-            image_name = self.image_paths[id_].split(".")[0]
+            image_name = Path(self.image_paths[id_])
             _, _, valid_mask = self.near_far_voxel(
-                self.sfm_octree, rays_o, rays_d, image_name
+                self.sfm_octree, rays_o, rays_d, image_name.with_suffix("").name
             )
             if self.use_voxel:
                 sample["mask"] = valid_mask
@@ -820,9 +821,7 @@ class PhototourismDataset(Dataset):
             sample["ts"] = id_ * torch.ones(len(rays), dtype=torch.long)
             if self.with_semantics:
                 semantic_map = np.load(
-                    os.path.join(
-                        self.root_dir, f"{self.semantic_map_path}/{image_name}.npz"
-                    )
+                    Path(self.root_dir) / self.semantic_map_path / image_name.with_suffix(".npz").name
                 )["arr_0"]
 
                 semantic_map = cv2.resize(
