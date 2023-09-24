@@ -5,6 +5,7 @@ import os
 from pathlib import Path
 
 import numpy as np
+from PIL import Image
 from matplotlib import pyplot as plt
 from tqdm import tqdm
 
@@ -44,6 +45,7 @@ excluded_labels = ["desk",
                    ]
 
 (root_dir / "masks").mkdir(exist_ok=True)
+(root_dir / "masks_vis").mkdir(exist_ok=True)
 
 for data in tqdm(val_dataset):
     # print(data)
@@ -62,3 +64,4 @@ for data in tqdm(val_dataset):
 
     image_name = data["image_name"]
     np.save((root_dir / "masks" / image_name).with_suffix('.npy'), mask)
+    Image.fromarray(mask).save((root_dir / "masks_vis" / image_name).with_suffix('.png'))
