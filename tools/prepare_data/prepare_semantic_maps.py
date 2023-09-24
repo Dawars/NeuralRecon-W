@@ -1,4 +1,5 @@
 import sys
+from pathlib import Path
 
 sys.path.insert(1, '.')
 import argparse
@@ -35,18 +36,18 @@ if __name__ == '__main__':
 
     print(f'Preparing semantic maps for {args.root_dir.split("/")[-1]} set...')
 
-    image_paths = glob.glob(os.path.join(args.root_dir, 'dense/images/*'))
+    image_paths = (Path(args.root_dir) / 'dense/images').glob("*.jpg")
 
     # build the DeepLabv3 model from a config file and a checkpoint file
     model = init_segmentor(config_file, checkpoint_file, device=f'cuda:{args.gpu}')
 
     for img_path in tqdm(image_paths):
         img = Image.open(img_path).convert('RGB')
-        image_name = img_path.split('/')[-1][:-len(img_path.split('.')[-1])-1]
+        image_name = img_path.with_suffix("").name
         img_w, img_h = img.size
         # resize
-        if args.img_downscale > 0:
-            img.thumbnail((args.img_downscale, args.img_downscale), resample=Image.LANCZOS)
+        # if args.img_downscale > 0:
+        #     img.thumbnail((args.img_downscale, args.img_downscale), resample=Image.LANCZOS)
 
         img = np.array(img)
         result = inference_segmentor(model, img)[0] # (H, W)
