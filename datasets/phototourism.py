@@ -23,7 +23,6 @@ sfm_path = "sparse"
 vis_octree = False
 vis_intersection = False
 vis_depth = False
-depth_percent = 0
 skip = 1
 
 
@@ -78,7 +77,7 @@ class PhototourismDataset(Dataset):
         self.scene_origin = scene_origin
         self.scene_radius = scene_radius
 
-        # hard code sfm depth padding
+        # hard code sfm depth padding (controls the ratio of min num rays in a batch with depth supervision)
         scene_name = self.root_dir.rsplit('/')[-1]
         if scene_name == 'brandenburg_gate':
             sfm_path = '../neuralsfm'
@@ -87,6 +86,8 @@ class PhototourismDataset(Dataset):
             sfm_path = '../neuralsfm'
             depth_percent = 0.4
         elif scene_name in ['lincoln_memorial', 'pantheon_exterior']:
+            depth_percent = 0.0
+        else:
             depth_percent = 0.0
         
         self.depth_percent = depth_percent
