@@ -19,7 +19,6 @@ from kornia import create_meshgrid
 import h5py
 
 # additinal configuarion
-sfm_path = "sparse"
 vis_octree = False
 vis_intersection = False
 vis_depth = False
@@ -86,8 +85,10 @@ class PhototourismDataset(Dataset):
             sfm_path = '../neuralsfm'
             depth_percent = 0.4
         elif scene_name in ['lincoln_memorial', 'pantheon_exterior']:
+            sfm_path = "sparse"
             depth_percent = 0.0
         else:
+            sfm_path = "sparse"
             depth_percent = 0.0
         
         self.depth_percent = depth_percent
