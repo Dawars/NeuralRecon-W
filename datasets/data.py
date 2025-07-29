@@ -45,7 +45,7 @@ class DataModule(pl.LightningDataModule):
             ), "world size should be a factor of 64, otherwise automatic padding will impair the performance"
             self.rank = dist.get_rank()
             logger.info(f"[rank:{self.rank}] world_size: {self.world_size}")
-        except RuntimeError as re:
+        except (RuntimeError, ValueError) as re:
             self.world_size = 1
             self.rank = 0
             logger.warning(str(re) + " (set world_size=1 and rank=0)")
