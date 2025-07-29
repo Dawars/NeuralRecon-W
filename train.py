@@ -53,7 +53,6 @@ def main(hparams, config):
 
     trainer = Trainer(max_epochs=hparams.num_epochs,
                       callbacks=[checkpoint_callback, DeviceStatsMonitor(cpu_stats=True)],
-                      resume_from_checkpoint=hparams.ckpt_path,
                       logger=logger,
                       devices=hparams.num_gpus,
                       num_nodes=hparams.num_nodes,
@@ -67,7 +66,7 @@ def main(hparams, config):
                       gradient_clip_val=0.99
                       )
 
-    trainer.fit(system, datamodule=data_module)
+    trainer.fit(system, datamodule=data_module, ckpt_path=hparams.ckpt_path)
 
 
 if __name__ == '__main__':
