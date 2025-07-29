@@ -56,13 +56,12 @@ def main(hparams, config):
                       logger=logger,
                       devices=hparams.num_gpus,
                       num_nodes=hparams.num_nodes,
-                      accelerator='cuda',
+                      accelerator='gpu',
                       strategy='ddp' if hparams.num_gpus > 1 else None,
                       num_sanity_val_steps=1,
                       val_check_interval=config.TRAINER.VAL_FREQ,
                       benchmark=True,
                       profiler=profiler,
-                      replace_sampler_ddp=replace_sampler_ddp,  # need to read all data of local dataset when config.DATASET.PHOTOTOURISM.IMG_DOWNSCALE==1
                       gradient_clip_val=0.99
                       )
 
