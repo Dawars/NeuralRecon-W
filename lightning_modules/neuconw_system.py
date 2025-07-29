@@ -535,7 +535,7 @@ class NeuconWSystem(LightningModule):
         torch.cuda.empty_cache()
         
         # Log directly - Lightning will automatically aggregate across steps
-        self.log("val/loss", loss, on_step=False, on_epoch=True)
-        self.log("val/psnr", psnr_, on_step=False, on_epoch=True, prog_bar=True)
+        self.log("val/loss", loss, on_step=False, on_epoch=True, sync_dist=True)
+        self.log("val/psnr", psnr_, on_step=False, on_epoch=True, prog_bar=True, sync_dist=True)
         
         return {"val_loss": loss, "val_psnr": psnr_}
