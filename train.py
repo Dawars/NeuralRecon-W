@@ -9,7 +9,7 @@ from lightning_modules.neuconw_system import NeuconWSystem
 import pytorch_lightning as pl
 from pytorch_lightning.callbacks import ModelCheckpoint
 from pytorch_lightning.callbacks import DeviceStatsMonitor
-from pytorch_lightning.profiler import AdvancedProfiler
+from pytorch_lightning.profilers import AdvancedProfiler
 from pytorch_lightning import Trainer
 from pytorch_lightning.loggers import TensorBoardLogger
 
