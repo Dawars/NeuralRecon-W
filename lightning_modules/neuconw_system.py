@@ -430,7 +430,6 @@ class NeuconWSystem(LightningModule):
             results[k] = torch.cat(v, dim=0)
         loss_d = self.loss(results, rgbs)
         loss = sum(l for l in loss_d.values())
-        log = {"val_loss": loss}
 
         if batch_nb == 0 and self.global_step > 0:
             if self.trainer.global_rank == 0:
@@ -531,16 +530,12 @@ class NeuconWSystem(LightningModule):
                 self.log("val/fscore", eval_metrics["fscore"], rank_zero_only=True)
 
         psnr_ = psnr(results[f"color"], rgbs)
-        log["val_psnr"] = psnr_
 
         # an attempt to speed up training
         torch.cuda.empty_cache()
-
-        return log
-
-    def validation_epoch_end(self, outputs):
-        mean_loss = torch.stack([x["val_loss"] for x in outputs]).mean()
-        mean_psnr = torch.stack([x["val_psnr"] for x in outputs]).mean()
-
-        self.log("val/loss", mean_loss)
-        self.log("val/psnr", mean_psnr, prog_bar=True)
+        
+        # Log directly - Lightning will automatically aggregate across steps
+        self.log("val/loss", loss, on_step=False, on_epoch=True)
+        self.log("val/psnr", psnr_, on_step=False, on_epoch=True, prog_bar=True)
+        
+        return {"val_loss": loss, "val_psnr": psnr_}
