@@ -59,7 +59,7 @@ def main(hparams, config):
                       accelerator='gpu',
                       strategy='ddp' if hparams.num_gpus > 1 else 'auto',
                       num_sanity_val_steps=1,
-                      val_check_interval=config.TRAINER.VAL_FREQ,
+                      val_check_interval=config.TRAINER.VAL_FREQ // (hparams.num_gpus * hparams.num_nodes),
                       benchmark=True,
                       profiler=profiler,
                       gradient_clip_val=0.99
