@@ -66,7 +66,7 @@ class PhototourismDataset(Dataset):
         ), "image can only be downsampled, please set img_downscale>=1!"
         self.img_downscale = img_downscale
         if split == "val":  # image downscale=1 will cause OOM in val mode
-            self.img_downscale = max(8, self.img_downscale)
+            self.img_downscale = max(2, self.img_downscale)
         self.val_num = max(1, val_num)  # at least 1
         self.define_transforms()
         self.white_back = False
