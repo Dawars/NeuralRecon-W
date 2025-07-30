@@ -462,7 +462,8 @@ class NeuconWSystem(LightningModule):
 
                 logger.log_image(key="val/normal", images=[normal_mapped], step=self.global_step)
                 logger.log_image(key="val/depth", images=[depth], step=self.global_step) # (3, H, W)
-                logger.log_image(key="val/gt", images=[torch.stack([img_gt, img])], step=self.global_step)  # (3, 3, H, W)?
+                logger.log_image(key="val/gt", images=[img_gt], step=self.global_step)
+                logger.log_image(key="val/pred", images=[img], step=self.global_step)
 
             # save mesh
             mesh_dir = os.path.join(self.logger.save_dir, self.logger.name, "meshes")
