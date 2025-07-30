@@ -1,5 +1,4 @@
 import os
-import math
 from opt import get_opts
 
 from datasets import DataModule
@@ -11,7 +10,7 @@ from pytorch_lightning.callbacks import ModelCheckpoint
 from pytorch_lightning.callbacks import DeviceStatsMonitor
 from pytorch_lightning.profilers import AdvancedProfiler
 from pytorch_lightning import Trainer
-from pytorch_lightning.loggers import TensorBoardLogger
+from pytorch_lightning.loggers import WandbLogger
 
 from config.defaults import get_cfg_defaults
 
@@ -39,14 +38,11 @@ def main(hparams, config):
                         mode='max',
                         save_top_k=-1)
 
-    logger = TensorBoardLogger(save_dir=hparams.save_path,
-                               name=hparams.exp_name,
-                               log_graph=False)
-    if config.DATASET.DATASET_NAME == 'phototourism' and config.DATASET.PHOTOTOURISM.IMG_DOWNSCALE <= 1:
-        replace_sampler_ddp = False
-    else:
-        replace_sampler_ddp = True
-
+    logger = WandbLogger(save_dir=os.path.join(hparams.save_path, 'wandb'),
+                         project="NeuralReconW",
+                         name=hparams.exp_name,
+                         id=os.getenv('SLURM_JOB_ID', None),
+                         config=hparams.__dict__)
 
     profiler = "simple" if hparams.num_gpus == 1 else None
     # profiler = AdvancedProfiler(dirpath=".", filename="perf_logs")
