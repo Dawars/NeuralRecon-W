@@ -89,7 +89,7 @@ class PhototourismDataset(Dataset):
             depth_percent = 0.0
         else:
             sfm_path = "sparse"
-            depth_percent = 0.0
+            depth_percent = 0.2
         
         self.depth_percent = depth_percent
         self.sfm_path = sfm_path
