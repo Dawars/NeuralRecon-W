@@ -466,7 +466,7 @@ class NeuconWSystem(LightningModule):
                 logger.log_image(key="val/pred", images=[img], step=self.global_step)
 
             # save mesh
-            mesh_dir = os.path.join(self.hparams.save_path, hparams.exp_name, "meshes")
+            mesh_dir = os.path.join(self.hparams.save_path, self.hparams.exp_name, "meshes")
             mesh = extract_mesh(
                 dim=128,
                 chunk=16384,
