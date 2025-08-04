@@ -466,71 +466,72 @@ class NeuconWSystem(LightningModule):
                 logger.log_image(key="val/pred", images=[img], step=self.global_step)
 
             # save mesh
-            mesh_dir = os.path.join(self.hparams.save_path, self.hparams.exp_name, "meshes")
-            mesh = extract_mesh(
-                dim=128,
-                chunk=16384,
-                scene_radius=self.scene_config["radius"],
-                scene_origin=self.scene_config["origin"],
-                with_color=False,
-                renderer=self.renderer,
-            )
-            os.makedirs(mesh_dir, exist_ok=True)
-            if self.trainer.global_rank == 0:
-                mesh.export(
-                    os.path.join(mesh_dir, "{:0>8d}.ply".format(self.global_step))
-                )
-            if "eval_bbx_detail" in self.scene_config.keys():
-                sfm_to_gt = np.array(self.scene_config["sfm2gt"])
-                gt_to_sfm = np.linalg.inv(sfm_to_gt)
-                sfm_vert1 = (
-                    gt_to_sfm[:3, :3] @ np.array(self.scene_config["eval_bbx_detail"][0])
-                    + gt_to_sfm[:3, 3]
-                )
-                sfm_vert2 = (
-                    gt_to_sfm[:3, :3] @ np.array(self.scene_config["eval_bbx_detail"][1])
-                    + gt_to_sfm[:3, 3]
-                )
-                eval_bbx_detail_min = np.minimum(sfm_vert1, sfm_vert2)
-                eval_bbx_detail_max = np.maximum(sfm_vert1, sfm_vert2)
-                eval_bbx_detail_center = (eval_bbx_detail_max + eval_bbx_detail_min) / 2
-                dim_eval_bbx = np.max(eval_bbx_detail_max - eval_bbx_detail_min) / 2
-
-                mesh_detail = extract_mesh(
-                    dim=256,
+            with torch.no_grad():
+                mesh_dir = os.path.join(self.hparams.save_path, self.hparams.exp_name, "meshes")
+                mesh = extract_mesh(
+                    dim=128,
                     chunk=16384,
                     scene_radius=self.scene_config["radius"],
                     scene_origin=self.scene_config["origin"],
-                    origin=(eval_bbx_detail_center - self.scene_config["origin"])
-                    / self.scene_config["radius"],
-                    radius=dim_eval_bbx / self.scene_config["radius"],
                     with_color=False,
                     renderer=self.renderer,
                 )
+                os.makedirs(mesh_dir, exist_ok=True)
                 if self.trainer.global_rank == 0:
-                    mesh_detail.export(
-                        os.path.join(
-                            mesh_dir, "{:0>8d}_detail.ply".format(self.global_step)
-                        )
+                    mesh.export(
+                        os.path.join(mesh_dir, "{:0>8d}.ply".format(self.global_step))
                     )
+                if "eval_bbx_detail" in self.scene_config.keys():
+                    sfm_to_gt = np.array(self.scene_config["sfm2gt"])
+                    gt_to_sfm = np.linalg.inv(sfm_to_gt)
+                    sfm_vert1 = (
+                        gt_to_sfm[:3, :3] @ np.array(self.scene_config["eval_bbx_detail"][0])
+                        + gt_to_sfm[:3, 3]
+                    )
+                    sfm_vert2 = (
+                        gt_to_sfm[:3, :3] @ np.array(self.scene_config["eval_bbx_detail"][1])
+                        + gt_to_sfm[:3, 3]
+                    )
+                    eval_bbx_detail_min = np.minimum(sfm_vert1, sfm_vert2)
+                    eval_bbx_detail_max = np.maximum(sfm_vert1, sfm_vert2)
+                    eval_bbx_detail_center = (eval_bbx_detail_max + eval_bbx_detail_min) / 2
+                    dim_eval_bbx = np.max(eval_bbx_detail_max - eval_bbx_detail_min) / 2
 
-            gt_path = os.path.join(self.config.DATASET.ROOT_DIR, "gt.ply")
-            if os.path.exists(gt_path) and self.trainer.global_rank == 0:
-                eval_metrics = eval_mesh(
-                    file_pred=os.path.join(
-                        mesh_dir, "{:0>8d}_detail.ply".format(self.global_step)
-                    ),
-                    file_trgt=gt_path,
-                    scene_config=self.scene_config,
-                    is_mesh=False,
-                    threshold=0.1,
-                    bbx_name="eval_bbx_detail",
-                    use_o3d=False,
-                )
-                print("eval_metric: ", eval_metrics)
-                self.log("val/prec", eval_metrics["prec"], rank_zero_only=True)
-                self.log("val/recal", eval_metrics["recal"], rank_zero_only=True)
-                self.log("val/fscore", eval_metrics["fscore"], rank_zero_only=True)
+                    mesh_detail = extract_mesh(
+                        dim=256,
+                        chunk=16384,
+                        scene_radius=self.scene_config["radius"],
+                        scene_origin=self.scene_config["origin"],
+                        origin=(eval_bbx_detail_center - self.scene_config["origin"])
+                        / self.scene_config["radius"],
+                        radius=dim_eval_bbx / self.scene_config["radius"],
+                        with_color=False,
+                        renderer=self.renderer,
+                    )
+                    if self.trainer.global_rank == 0:
+                        mesh_detail.export(
+                            os.path.join(
+                                mesh_dir, "{:0>8d}_detail.ply".format(self.global_step)
+                            )
+                        )
+
+                gt_path = os.path.join(self.config.DATASET.ROOT_DIR, "gt.ply")
+                if os.path.exists(gt_path) and self.trainer.global_rank == 0:
+                    eval_metrics = eval_mesh(
+                        file_pred=os.path.join(
+                            mesh_dir, "{:0>8d}_detail.ply".format(self.global_step)
+                        ),
+                        file_trgt=gt_path,
+                        scene_config=self.scene_config,
+                        is_mesh=False,
+                        threshold=0.1,
+                        bbx_name="eval_bbx_detail",
+                        use_o3d=False,
+                    )
+                    print("eval_metric: ", eval_metrics)
+                    self.log("val/prec", eval_metrics["prec"], rank_zero_only=True)
+                    self.log("val/recal", eval_metrics["recal"], rank_zero_only=True)
+                    self.log("val/fscore", eval_metrics["fscore"], rank_zero_only=True)
 
         psnr_ = psnr(results[f"color"], rgbs)
 
